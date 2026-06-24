@@ -1,45 +1,39 @@
 import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from openai import OpenAI
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام 👋 ربات فعاله")
+    await update.message.reply_text("سلام 👋 من ربات هوشمند زبانساز هستم 🤖")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
+    text = update.message.text
 
-    # ❌ سوال قیمت
-    if "قیمت" in text or "هزینه" in text or "چنده" in text:
+    # فیلتر قیمت (اختیاری)
+    if "قیمت" in text or "چنده" in text:
         await update.message.reply_text(
-            "📚 ما قیمت‌فروشی نداریم 😊\n"
-            "برای اطلاعات دوره‌ها و کلاس‌ها پیام بدید."
+            "📚 ما قیمت نمی‌دیم 😊\nبرای اطلاعات به @ketabun پیام بدید"
         )
         return
 
-    # 📚 معرفی کلاس / زبانساز
-    if "کلاس" in text or "زبان" in text or "زبانساز" in text:
-        await update.message.reply_text(
-            "📚 زبانساز:\n"
-            "آموزش زبان آلمانی از سطح A1 تا C1 🇩🇪\n"
-            "تمرکز روی مکالمه و یادگیری واقعی 💪"
-        )
-        return
-
-    # 🧑‍💼 ثبت‌نام
-    if "ثبت" in text or "نام" in text or "ثبت‌نام" in text:
-        await update.message.reply_text(
-            "📝 برای ثبت‌نام لطفاً به ادمین پیام بدید:\n"
-            "@ketabun"
-        )
-        return
-
-    # 💬 جواب عمومی
-    await update.message.reply_text(
-        "سلام 😊\n"
-        "برای اطلاعات درباره کلاس‌های زبانساز سوال بپرس 👍"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "تو یک دستیار آموزش زبان آلمانی هستی. دوستانه، کوتاه و مفید جواب بده."
+            },
+            {
+                "role": "user",
+                "content": text
+            }
+        ]
     )
+
+    await update.message.reply_text(response.choices[0].message.content)
 
 def main():
     app = Application.builder().token(TOKEN).build()
