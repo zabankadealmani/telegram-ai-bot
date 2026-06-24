@@ -1,4 +1,5 @@
 import os
+import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from openai import OpenAI
@@ -10,29 +11,43 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 ADMIN_ID = 744748269
 
-# 👥 ذخیره کاربران
-users = set()
+# 📁 فایل ذخیره کاربران
+USERS_FILE = "users.json"
+
+# 🧠 لود کاربران از فایل
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "r") as f:
+            return set(json.load(f))
+    return set()
+
+# 💾 ذخیره کاربران
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(list(users), f)
+
+users = load_users()
 
 # 🟢 استارت
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     users.add(user_id)
+    save_users(users)
 
     await update.message.reply_text(
         "سلام 👋\n"
         "ربات زبانساز فعال است 🇩🇪"
     )
 
-# 📊 لیست کاربران برای ادمین
+# 👥 لیست کاربران
 async def users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
         return
 
-    text = "👥 لیست کاربران:\n\n"
-
-    for u in users:
-        text += f"{u}\n"
+    text = "👥 کاربران:\n\n"
+    for i, u in enumerate(list(users), start=1):
+        text += f"{i}. {u}\n"
 
     await update.message.reply_text(text)
 
@@ -44,24 +59,25 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = " ".join(context.args)
 
+    sent = 0
+
     for u in users:
         try:
             await context.bot.send_message(u, msg)
+            sent += 1
         except:
             pass
 
-    await update.message.reply_text("✅ ارسال شد به همه کاربران")
+    await update.message.reply_text(f"✅ ارسال شد به {sent} نفر")
 
-# 👤 ارسال پیام به یک نفر (بدون دردسر)
+# 👤 پیام به یک نفر با شماره لیست
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text(
-            "مثال:\n/send شماره ردیف پیام"
-        )
+        await update.message.reply_text("مثال:\n/send 1 سلام")
         return
 
     index = int(context.args[0]) - 1
@@ -81,11 +97,14 @@ async def send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ ارسال نشد")
 
-# 🧠 AI پاسخ‌دهی
+# 🧠 AI
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
-    users.add(update.effective_user.id)
+
+    user_id = update.effective_user.id
+    users.add(user_id)
+    save_users(users)
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -93,18 +112,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             {
                 "role": "system",
                 "content": """
-تو دستیار زبان آلمانی هستی.
+تو دستیار زبان آلمانی آموزشگاه زبانساز هستی.
 کوتاه جواب بده (حداکثر 3 خط).
 
 فارسی → آلمانی + تلفظ
+اسم → آرتیکل بده
 آلمانی → ترجمه فارسی
-اگر مثال خواست → جمله کوتاه بده
+اگر مثال خواست → جمله کوتاه
 
 کتاب:
 A1-B1 Starten Wir
 B2+ Sicher
 
-کلاس‌ها آنلاین Google Meet
+کلاس‌ها Google Meet
 پشتیبانی: @ketabun
 """
             },
