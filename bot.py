@@ -3,67 +3,62 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from openai import OpenAI
 
-# 🔑 گرفتن کلیدها از Render Environment
+# 🔑 کلیدها
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 🤖 اتصال به OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# 🟢 /start
+# 🟢 استارت
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "سلام 👋\n"
-        "به ربات آموزش زبانساز خوش اومدی 🤖"
+        "به ربات آموزش زبانساز خوش اومدی 🇩🇪"
     )
 
-# 🧠 هندل پیام‌ها
+# 🧠 پردازش پیام‌ها
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    # 🚫 فیلتر سوالات غیر مرتبط (اختیاری)
-    allowed_keywords = ["آلمانی", "deutsch", "زبان", "کتاب", "کلاس"]
-    if not any(k in text.lower() for k in allowed_keywords) and len(text) < 3:
+    # 🚫 سوالات غیر مرتبط
+    if any(word in text for word in ["فیلم", "موزیک", "اخبار", "بازی"]):
         await update.message.reply_text(
-            "لطفاً فقط درباره زبان آلمانی سوال بپرس 🇩🇪"
+            "فقط درباره زبان آلمانی سوال بپرس 🇩🇪"
         )
         return
 
-    # 🚫 فیلتر قیمت
+    # 🚫 قیمت
     if "قیمت" in text or "هزینه" in text or "چنده" in text:
         await update.message.reply_text(
-            "📚 برای اطلاعات کلاس‌ها لطفاً به پشتیبان پیام بده: @ketabun"
+            "📚 برای اطلاعات کلاس‌ها به پشتیبانی پیام بده: @ketabun"
         )
         return
 
-    # 🤖 درخواست به ChatGPT
+    # 🤖 AI
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
                 "role": "system",
                 "content": (
-                    "تو دستیار رسمی آموزشگاه زبانساز هستی.\n"
-                    "فقط درباره زبان آلمانی جواب بده.\n"
-                    "جواب‌ها حداکثر 2 خط باشند.\n"
-                    "اگر سوال غیر مرتبط بود فقط بگو: لطفاً فقط درباره زبان آلمانی سوال بپرس.\n\n"
+                    "تو دستیار آموزش زبان آلمانی آموزشگاه زبانساز هستی.\n"
+                    "کاملاً آموزشی، کوتاه و کاربردی جواب بده (حداکثر 2 خط).\n\n"
 
-                    "قوانین ترجمه:\n"
+                    "وظایف:\n"
                     "- فارسی → آلمانی + تلفظ\n"
-                    "- اگر اسم بود آرتیکل بده (der/die/das)\n"
+                    "- اگر کلمه اسم بود آرتیکل بده (der/die/das)\n"
+                    "- اگر کاربر گفت 'مثال' → یک جمله کوتاه آلمانی + ترجمه فارسی بده\n"
                     "- جمله آلمانی → ترجمه فارسی\n\n"
 
-                    "کتاب‌ها:\n"
+                    "اطلاعات آموزشگاه:\n"
                     "- A1 تا B1: Starten Wir\n"
-                    "- B2 به بالا: Sicher\n\n"
+                    "- B2 به بالا: Sicher\n"
+                    "- کلاس‌ها: نیمه‌خصوصی Google Meet\n"
+                    "- مدرسین: ایرانی و نیتیو حرفه‌ای\n"
+                    "- پشتیبانی: @ketabun\n\n"
 
-                    "کلاس‌ها:\n"
-                    "- نیمه‌خصوصی\n"
-                    "- آنلاین Google Meet\n"
-                    "- مدرسین ایرانی و نیتیو\n\n"
-
-                    "پشتیبانی: @ketabun\n"
-                    "گاهی به شکل طبیعی پیشنهاد ثبت‌نام بده"
+                    "قیمت نده، فقط هدایت به پشتیبانی بده.\n"
+                    "اگر سوال کاملاً بی‌ربط بود فقط بگو: فقط درباره زبان آلمانی سوال بپرس."
                 )
             },
             {
