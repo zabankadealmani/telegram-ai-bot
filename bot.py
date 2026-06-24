@@ -1,21 +1,20 @@
 import os
 import json
 import random
-import asyncio
+import tempfile
+from gtts import gTTS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from openai import OpenAI
 
-# 🔑 KEYS
+# 🔑 CONFIG
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_ID = 744748269
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
 
-# 📦 DB
 def load_users():
     if os.path.exists(USERS_FILE):
         return json.load(open(USERS_FILE))
@@ -25,254 +24,119 @@ def save_users(data):
     json.dump(data, open(USERS_FILE, "w"))
 
 users = load_users()
-
 user_test = {}
-broadcast_mode = {}
 
 # 🎓 LINKS
-AUSBILDUNG_LINK = "https://t.me/+TFAMe1OSiBhmZDhk"
-
-# 📚 DAILY WORDS
-DAILY_WORDS = {
-    "A1": ["Haus = خانه", "Buch = کتاب", "Wasser = آب"],
-    "A2": ["Ich bin müde = من خسته هستم", "Heute ist schön = امروز خوب است"],
-    "B1": ["weil ich keine Zeit habe = چون وقت ندارم"],
-    "B2": ["Je mehr ich lerne, desto besser werde ich = هرچی بیشتر یاد بگیرم بهتر میشم"]
+LINKS = {
+    "support": "https://t.me/YourSupportLink",
+    "edu": "https://t.me/+IcNQUW7bM_xjZjdk",
+    "live": "https://t.me/+VMSXWp62w-Q0MGQ8",
+    "film": "https://t.me/+5Ll-_PHEmfEwOWQ8",
+    "podcast": "https://t.me/+a5HK5Ktg1kNiY2E0",
+    "music": "https://t.me/+p0_P4lFcvIo0NWI0",
+    "ausbildung": "https://t.me/+TFAMe1OSiBhmZDhk",
+    "exam": "https://t.me/+VMSXWp62w-Q0MGQ8"
 }
 
-LEVELS = ["A1", "A2", "B1", "B2"]
-
-QUESTIONS = {
-    "A1": [
-        {"q": "Haus یعنی چی؟", "a": "خانه"},
-        {"q": "Buch یعنی چی؟", "a": "کتاب"},
-    ],
-    "A2": [
-        {"q": "Ich bin müde یعنی چی؟", "a": "من خسته هستم"},
-    ],
-    "B1": [
-        {"q": "weil یعنی چی؟", "a": "چون"},
-    ],
-    "B2": [
-        {"q": "Wenn ich Zeit hätte یعنی چی؟", "a": "اگر وقت داشتم می‌آمدم"},
-    ]
-}
-
-# 🧭 MAIN MENU
+# 🧭 MENU
 def main_menu():
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📩 پشتیبانی و ثبت‌نام", callback_data="support")],
-
-        [InlineKeyboardButton("📚 آموزش آلمانی", callback_data="edu")],
-        [InlineKeyboardButton("🎥 کلاس آنلاین رایگان", callback_data="live")],
-
-        [
-            InlineKeyboardButton("🎬 فیلم", callback_data="film"),
-            InlineKeyboardButton("🎧 پادکست", callback_data="podcast")
-        ],
-
-        [
-            InlineKeyboardButton("🎵 آهنگ", callback_data="music"),
-            InlineKeyboardButton("🎓 اوسبیلدونگ", callback_data="ausbildung")
-        ],
-
-        [
-            InlineKeyboardButton("🧪 آزمون", callback_data="start_test"),
-            InlineKeyboardButton("📊 تعیین سطح", callback_data="start_test")
-        ],
-
-        [InlineKeyboardButton("⚙️ پنل ادمین", callback_data="admin")]
+        [InlineKeyboardButton("📩 پشتیبانی", url=LINKS["support"])],
+        [InlineKeyboardButton("📚 آموزش آلمانی", url=LINKS["edu"])],
+        [InlineKeyboardButton("🎥 کلاس آنلاین", url=LINKS["live"])],
+        [InlineKeyboardButton("🎬 فیلم", url=LINKS["film"])],
+        [InlineKeyboardButton("🎧 پادکست", url=LINKS["podcast"])],
+        [InlineKeyboardButton("🎵 آهنگ", url=LINKS["music"])],
+        [InlineKeyboardButton("🎓 اوسبیلدونگ", url=LINKS["ausbildung"])],
+        [InlineKeyboardButton("🧪 آزمون", url=LINKS["exam"])]
     ])
 
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = str(update.effective_user.id)
-
     users[uid] = {"level": "A1"}
     save_users(users)
 
     await update.message.reply_text(
-        "👋 خوش آمدی 🇩🇪\n"
-        "✍️ ترجمه + آموزش + آزمون هوشمند",
+        "👋 خوش آمدی 🇩🇪\n✍️ ترجمه + تلفظ + ویس",
         reply_markup=main_menu()
     )
 
-# 🤖 AI TRANSLATE
+# 🤖 TRANSLATION AI
 def ai_translate(text):
-
-    prompt = f"""
-Translate Persian ↔ German.
-
-Text: {text}
-
-ONLY:
-1. Translation
-2. Article
-3. Plural
-NO example
-"""
 
     res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "German teacher"},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": f"""
+Translate Persian ↔ German.
+
+If word:
+- translation
+- article
+- plural
+- pronunciation (English + Persian)
+
+If sentence:
+- full translation
+- pronunciation
+
+NO examples
+{text}
+"""}
         ]
     )
 
     return res.choices[0].message.content
 
-# 💬 MESSAGE HANDLER (FIXED MODE SEPARATION)
+# 🎤 MAKE VOICE (FREE gTTS)
+def make_voice(word):
+
+    tts = gTTS(text=word, lang="de")
+
+    file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tts.save(file.name)
+
+    return file.name
+
+# 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = str(update.effective_user.id)
     text = update.message.text
 
-    # 📩 send to admin
-    await context.bot.send_message(ADMIN_ID, f"📩 {uid}: {text}")
-
-    # 🚨 IF USER IN TEST MODE
+    # 🧪 TEST MODE
     if uid in user_test:
         await check_answer(update, context)
         return
 
-    # 🤖 TRANSLATION MODE
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📘 مثال", callback_data="example"),
-            InlineKeyboardButton("🔙 برگشت", callback_data="home")
-        ]
+            InlineKeyboardButton("🔊 تلفظ", callback_data=f"voice:{text}"),
+            InlineKeyboardButton("📘 مثال", callback_data=f"example:{text}")
+        ],
+        [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
     ])
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-# 🎯 START TEST
-async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 📘 EXAMPLE AI
+def ai_example(word):
 
-    query = update.callback_query
-    await query.answer()
-
-    uid = str(query.from_user.id)
-
-    user_test[uid] = {
-        "level_index": 0,
-        "step": 0,
-        "correct": 0,
-        "current": None
-    }
-
-    await send_question(query)
-
-# ❓ SEND QUESTION
-async def send_question(update):
-
-    uid = str(update.from_user.id)
-    state = user_test[uid]
-
-    level = LEVELS[state["level_index"]]
-    q = random.choice(QUESTIONS[level])
-
-    state["current"] = q
-
-    await update.message.reply_text(
-        f"📊 سوال:\n\n{q['q']}\n\n✍️ جواب را تایپ کن:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
-        ])
+    res = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Make 1 simple German sentence + Persian meaning"},
+            {"role": "user", "content": word}
+        ]
     )
 
-# 📊 CHECK ANSWER (FIXED)
-async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    uid = str(update.effective_user.id)
-
-    if uid not in user_test:
-        return
-
-    state = user_test[uid]
-
-    user_answer = update.message.text.strip().lower()
-    correct = state["current"]["a"].lower()
-
-    if user_answer == correct:
-        state["correct"] += 1
-
-    state["step"] += 1
-
-    # 📈 END TEST
-    if state["step"] >= 10:
-
-        if state["correct"] >= 8:
-            new_level = LEVELS[min(state["level_index"] + 1, 3)]
-        else:
-            new_level = LEVELS[state["level_index"]]
-
-        users[uid]["level"] = new_level
-        save_users(users)
-
-        del user_test[uid]
-
-        await update.message.reply_text(
-            f"📊 سطح شما: {new_level}",
-            reply_markup=main_menu()
-        )
-        return
-
-    await send_question(update)
-
-# 🎓 DAILY WORD SYSTEM
-async def send_daily_words(app):
-
-    while True:
-
-        for uid, data in users.items():
-
-            try:
-                level = data.get("level", "A1")
-                words = DAILY_WORDS.get(level, DAILY_WORDS["A1"])
-                word = random.choice(words)
-
-                await app.bot.send_message(
-                    chat_id=int(uid),
-                    text=f"📚 لغت امروز ({level}):\n\n{word}"
-                )
-
-            except:
-                pass
-
-        await asyncio.sleep(86400)  # 24h
-
-# 📊 ADMIN PANEL
-def admin_panel():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👥 آمار", callback_data="stats")],
-        [InlineKeyboardButton("📢 پیام همگانی", callback_data="broadcast")],
-        [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
-    ])
-
-# 📊 STATS
-def stats():
-    total = len(users)
-    levels = {"A1":0,"A2":0,"B1":0,"B2":0}
-
-    for u in users.values():
-        lvl = u.get("level")
-        if lvl in levels:
-            levels[lvl] += 1
-
-    return f"""
-📊 آمار:
-
-👥 کاربران: {total}
-
-🟢 A1: {levels['A1']}
-🟡 A2: {levels['A2']}
-🟠 B1: {levels['B1']}
-🔴 B2: {levels['B2']}
-"""
+    return res.choices[0].message.content
 
 # 🔁 CALLBACK
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -280,51 +144,29 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    uid = str(query.from_user.id)
     data = query.data
 
-    if data == "home":
+    # 📘 EXAMPLE
+    if data.startswith("example:"):
+
+        word = data.split(":", 1)[1]
+        ex = ai_example(word)
+
+        await query.message.reply_text(f"📘 مثال:\n\n{ex}")
+
+    # 🔊 VOICE
+    elif data.startswith("voice:"):
+
+        word = data.split(":", 1)[1]
+
+        audio = make_voice(word)
+
+        await query.message.reply_voice(
+            voice=open(audio, "rb")
+        )
+
+    elif data == "home":
         await query.message.reply_text("🏠 منو:", reply_markup=main_menu())
-
-    elif data == "example":
-        await query.message.reply_text("💡 مثال: Das Auto ist schnell.")
-
-    elif data == "ausbildung":
-        await query.message.reply_text(f"🎓 اوسبیلدونگ:\n{AUSBILDUNG_LINK}")
-
-    elif data == "admin":
-        if query.from_user.id == ADMIN_ID:
-            await query.message.reply_text(stats(), reply_markup=admin_panel())
-        else:
-            await query.message.reply_text("❌ دسترسی ندارید")
-
-    elif data == "stats":
-        await query.message.reply_text(stats())
-
-    elif data == "broadcast":
-        context.user_data["broadcast"] = True
-        await query.message.reply_text("✍️ پیام همگانی را ارسال کنید:")
-
-    elif data == "start_test":
-        await start_test(update, context)
-
-# 📢 BROADCAST HANDLER
-async def admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    if context.user_data.get("broadcast"):
-        text = update.message.text
-
-        for uid in users.keys():
-            try:
-                await context.bot.send_message(int(uid), text)
-            except:
-                pass
-
-        context.user_data["broadcast"] = False
-        await update.message.reply_text("✅ ارسال شد")
 
 # 🚀 RUN
 def main():
@@ -333,13 +175,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(router))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_message))
-
-    # 🔥 DAILY SYSTEM START
-    asyncio.create_task(send_daily_words(app))
 
     app.run_polling()
 
