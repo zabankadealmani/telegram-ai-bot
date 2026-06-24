@@ -1,2 +1,2 @@
 import os
-TOKEN = os.getenv("7988767140:AAG5xCMgbY02PS7WJhF58l1-ohrqQb3rZvU")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
