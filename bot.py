@@ -23,11 +23,46 @@ users = load_users()
 # 🧠 STATE
 admin_state = {}
 
+# 📚 LINKS (NEW)
+LINKS = {
+    "edu": "https://t.me/+IcNQUW7bM_xjZjdk",
+    "film": "https://t.me/+5Ll-_PHEmfEwOWQ8",
+    "podcast": "https://t.me/+a5HK5Ktg1kNiY2E0",
+    "job": "https://t.me/+TFAMe1OSiBhmZDhk",
+    "music": "https://t.me/+p0_P4lFcvIo0NWI0",
+    "exam": "https://t.me/+VMSXWp62w-Q0MGQ8",
+    "class": "https://t.me/+Gq6nK-16B7Y2OTk0",
+    "support": "https://t.me/ketabun"
+}
+
 # 📚 MENU
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 تعیین سطح", callback_data="level")],
-        [InlineKeyboardButton("🧠 ترجمه", callback_data="translate")],
+
+        [
+            InlineKeyboardButton("📚 آموزش زبان", url=LINKS["edu"]),
+            InlineKeyboardButton("🎬 فیلم آلمانی", url=LINKS["film"])
+        ],
+
+        [
+            InlineKeyboardButton("🎧 پادکست", url=LINKS["podcast"]),
+            InlineKeyboardButton("🎵 آهنگ", url=LINKS["music"])
+        ],
+
+        [
+            InlineKeyboardButton("💼 اوسبیلدونگ", url=LINKS["job"]),
+            InlineKeyboardButton("🧪 آزمون", url=LINKS["exam"])
+        ],
+
+        [
+            InlineKeyboardButton("🎓 کلاس رایگان", url=LINKS["class"]),
+            InlineKeyboardButton("🆘 پشتیبانی", url=LINKS["support"])
+        ],
+
+        [
+            InlineKeyboardButton("📊 تعیین سطح", callback_data="level"),
+            InlineKeyboardButton("🧠 ترجمه", callback_data="translate")
+        ]
     ])
 
 # 🚀 START
@@ -45,7 +80,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 📩 پیام کاربران → ارسال به ادمین
+# 📩 FORWARD TO ADMIN
 async def forward_to_admin(update: Update):
 
     user = update.effective_user
@@ -54,11 +89,10 @@ async def forward_to_admin(update: Update):
     msg = f"""
 📩 پیام جدید
 
-👤 نام: {user.first_name}
-🆔 ID: {user.id}
+👤 {user.first_name}
+🆔 {user.id}
 
-💬 پیام:
-{text}
+💬 {text}
 """
 
     await update.get_bot().send_message(
@@ -66,37 +100,20 @@ async def forward_to_admin(update: Update):
         text=msg
     )
 
-# 🤖 پاسخ عادی ربات
+# 🤖 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = str(update.effective_user.id)
-    text = update.message.text
-
-    # ارسال به ادمین
     await forward_to_admin(update)
 
-    # پاسخ ساده ترجمه
+    text = update.message.text
+
     await update.message.reply_text(
-        f"🧠 ترجمه:\n{text}",
+        "🧠 ترجمه:\n" + text,
         reply_markup=main_menu()
     )
 
-# 🛠 ADMIN PANEL
-def admin_panel():
-    buttons = []
-
-    for uid, data in users.items():
-        name = data.get("name", "User")
-
-        buttons.append([
-            InlineKeyboardButton(f"👤 {name}", callback_data=f"user_{uid}")
-        ])
-
-    buttons.append([
-        InlineKeyboardButton("📢 ارسال همگانی", callback_data="broadcast")
-    ])
-
-    return InlineKeyboardMarkup(buttons)
+# 🛠 ADMIN STATE
+admin_state = {}
 
 # 🛠 CALLBACKS
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,85 +121,17 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    uid = query.from_user.id
-
-    # 🔐 ADMIN PANEL
-    if uid == ADMIN_ID:
-
-        # لیست کاربران
-        if query.data == "admin":
-            await query.message.reply_text("🛠 پنل ادمین", reply_markup=admin_panel())
-            return
-
-        # انتخاب کاربر
-        if query.data.startswith("user_"):
-
-            target = query.data.replace("user_", "")
-
-            admin_state["target"] = target
-            admin_state["mode"] = "send_one"
-
-            await query.message.reply_text("✍ پیام خود را ارسال کنید:")
-            return
-
-        # broadcast
-        if query.data == "broadcast":
-
-            admin_state["mode"] = "broadcast"
-            await query.message.reply_text("📢 پیام همگانی را بنویسید:")
-            return
-
-    # 🧠 ترجمه / تعیین سطح
     if query.data == "translate":
         await query.message.reply_text("💬 فقط پیام بفرست تا ترجمه کنم")
 
-# 💬 ADMIN MESSAGE HANDLER
-async def admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    uid = update.effective_user.id
-    text = update.message.text
-
-    # 👑 اگر ادمین
-    if uid == ADMIN_ID and "mode" in admin_state:
-
-        # 📢 ارسال همگانی
-        if admin_state["mode"] == "broadcast":
-
-            for u in users:
-                try:
-                    await context.bot.send_message(chat_id=int(u), text=text)
-                except:
-                    pass
-
-            await update.message.reply_text("✅ ارسال شد")
-            admin_state.clear()
-            return
-
-        # 👤 ارسال تکی
-        if admin_state["mode"] == "send_one":
-
-            target = admin_state["target"]
-
-            try:
-                await context.bot.send_message(chat_id=int(target), text=text)
-                await update.message.reply_text("✅ ارسال شد")
-            except:
-                await update.message.reply_text("❌ خطا")
-
-            admin_state.clear()
-            return
-
-# 🚀 MAIN
+# 🚀 RUN
 def main():
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(CallbackQueryHandler(buttons))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_message))
 
     app.run_polling()
 
