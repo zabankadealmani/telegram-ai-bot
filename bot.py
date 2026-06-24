@@ -3,9 +3,14 @@ import json
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from openai import OpenAI
 
+# 🔑 KEYS
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ADMIN_ID = 744748269
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
 
@@ -19,35 +24,36 @@ def save_users(data):
     json.dump(data, open(USERS_FILE, "w"))
 
 users = load_users()
-
 user_test = {}
+last_word = {}
 
-# 🔗 LINKS
-LINKS = {
-    "edu": "https://t.me/+IcNQUW7bM_xjZjdk",
-    "live": "https://t.me/+Gq6nK-16B7Y2OTk0",
-    "film": "https://t.me/+5Ll-_PHEmfEwOWQ8",
-    "podcast": "https://t.me/+a5HK5Ktg1kNiY2E0",
-    "music": "https://t.me/+p0_P4lFcvIo0NWI0",
-    "exam": "https://t.me/+VMSXWp62w-Q0MGQ8"
-}
+# 🎓 LINKS
+AUSBILDUNG_LINK = "https://t.me/+TFAMe1OSiBhmZDhk"
 
 # 🧭 MAIN MENU
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📚 آموزش زبان آلمانی", url=LINKS["edu"])],
-        [InlineKeyboardButton("🎥 کلاس آنلاین رایگان", url=LINKS["live"])],
+        [InlineKeyboardButton("📩 پشتیبانی و ثبت‌نام", callback_data="support")],
+
+        [InlineKeyboardButton("📚 آموزش آلمانی", callback_data="edu")],
+        [InlineKeyboardButton("🎥 کلاس آنلاین رایگان", callback_data="live")],
+
         [
-            InlineKeyboardButton("🎬 فیلم", url=LINKS["film"]),
-            InlineKeyboardButton("🎧 پادکست", url=LINKS["podcast"])
+            InlineKeyboardButton("🎬 فیلم", callback_data="film"),
+            InlineKeyboardButton("🎧 پادکست", callback_data="podcast")
         ],
+
         [
-            InlineKeyboardButton("🎵 آهنگ", url=LINKS["music"]),
-            InlineKeyboardButton("🧪 آمادگی آزمون", url=LINKS["exam"])
+            InlineKeyboardButton("🎵 آهنگ", callback_data="music"),
+            InlineKeyboardButton("🎓 اوسبیلدونگ", callback_data="ausbildung")
         ],
+
         [
+            InlineKeyboardButton("🧪 آمادگی آزمون", callback_data="exam"),
             InlineKeyboardButton("📊 تعیین سطح", callback_data="start_test")
-        ]
+        ],
+
+        [InlineKeyboardButton("⚙️ پنل ادمین", callback_data="admin")]
     ])
 
 # 🚀 START
@@ -55,77 +61,85 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = str(update.effective_user.id)
 
-    users[uid] = {"name": update.effective_user.first_name, "level": None}
+    users[uid] = {
+        "name": update.effective_user.first_name,
+        "level": None
+    }
     save_users(users)
 
     await update.message.reply_text(
-        "👋 خوش آمدی 🇩🇪\n"
-        "✍️ هر کلمه یا جمله بفرستی ترجمه می‌کنم\n"
-        "📊 یا در تعیین سطح شرکت کن",
+        "👋 خوش آمدی 🇩🇪\n\n"
+        "✍️ هر چیزی بفرستی ترجمه می‌کنم (فارسی ↔ آلمانی)\n"
+        "📘 آرتیکل + جمع + مثال (با دکمه)",
         reply_markup=main_menu()
     )
 
-# 📩 ADMIN FORWARD
-async def forward(update: Update):
+# 🤖 AI TRANSLATION
+def ai_translate(text):
 
-    u = update.effective_user
-    t = update.message.text
+    prompt = f"""
+Translate Persian ↔ German.
 
-    msg = f"📩 {u.first_name} ({u.id})\n💬 {t}"
+Text: {text}
 
-    await update.get_bot().send_message(ADMIN_ID, msg)
+Return:
+1. Translation
+2. Article (if noun)
+3. Plural (if noun)
 
-# 🌍 SMART DICTIONARY (WITH ARTICLE + PLURAL)
-def translate(text):
+NO example sentence.
+"""
 
-    dictionary = {
-        "book": {"article": "das", "plural": "die Bücher", "fa": "کتاب"},
-        "house": {"article": "das", "plural": "die Häuser", "fa": "خانه"},
-        "water": {"article": "das", "plural": "—", "fa": "آب"},
-        "hello": {"article": "", "plural": "", "fa": "سلام"},
-        "danke": {"article": "", "plural": "", "fa": "ممنون"},
-        "ich bin müde": {"article": "", "plural": "", "fa": "من خسته هستم"}
-    }
+    res = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are Persian-German teacher."},
+            {"role": "user", "content": prompt}
+        ]
+    )
 
-    key = text.lower().strip()
+    return res.choices[0].message.content
 
-    if key in dictionary:
-
-        item = dictionary[key]
-
-        return (
-            f"📘 آرتیکل: {item['article']}\n"
-            f"📚 جمع: {item['plural']}\n"
-            f"🇮🇷 معنی: {item['fa']}"
-        )
-
-    return f"❌ پیدا نشد\n🔎 ترجمه: {text}"
-
-# 💬 MESSAGE HANDLER (NO BUTTONS HERE)
+# 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    await forward(update)
+    uid = str(update.effective_user.id)
+    text = update.message.text
 
-    result = translate(update.message.text)
+    # 📩 send to admin
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"📩 پیام کاربر {uid}:\n{text}"
+    )
 
-    await update.message.reply_text(result)
+    result = ai_translate(text)
+    last_word[uid] = text
 
-# 📊 LEVEL TEST SYSTEM
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📘 مثال", callback_data="example"),
+            InlineKeyboardButton("🔙 برگشت", callback_data="home")
+        ]
+    ])
+
+    await update.message.reply_text(result, reply_markup=keyboard)
+
+# 📊 SMART TEST
 LEVELS = ["A1", "A2", "B1", "B2"]
 
 QUESTIONS = {
     "A1": [
-        {"q": "Haus یعنی چی؟", "a": "B"},
-        {"q": "Buch یعنی چی؟", "a": "B"},
+        {"q": "Haus یعنی چی؟", "a": "خانه"},
+        {"q": "Buch یعنی چی؟", "a": "کتاب"},
     ],
     "A2": [
-        {"q": "Ich bin müde یعنی چی؟", "a": "A"},
+        {"q": "Ich bin müde یعنی چی؟", "a": "من خسته هستم"},
     ],
     "B1": [
         {"q": "weil یعنی چی؟", "a": "چون"},
     ],
     "B2": [
-        {"q": "Wenn ich Zeit hätte...", "a": "Wenn ich Zeit hätte, würde ich kommen"},
+        {"q": "Wenn ich Zeit hätte...", "a": "اگر وقت داشتم می‌آمدم"},
     ]
 }
 
@@ -140,14 +154,13 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_test[uid] = {
         "level_index": 0,
         "step": 0,
-        "correct": 0,
-        "wrong": 0
+        "correct": 0
     }
 
-    await send_q(query)
+    await send_question(query)
 
 # ❓ QUESTION
-async def send_q(update):
+async def send_question(update):
 
     uid = update.from_user.id
     state = user_test[uid]
@@ -158,83 +171,107 @@ async def send_q(update):
     state["current"] = q
 
     keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("A", callback_data="A"),
-            InlineKeyboardButton("B", callback_data="B"),
-            InlineKeyboardButton("C", callback_data="C"),
-            InlineKeyboardButton("D", callback_data="D")
-        ],
-        [
-            InlineKeyboardButton("⬅ برگشت", callback_data="back")
-        ]
+        [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
     ])
 
     await update.message.reply_text(q["q"], reply_markup=keyboard)
 
 # 📊 CHECK ANSWER
-async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    query = update.callback_query
-    await query.answer()
+    uid = update.effective_user.id
+    state = user_test.get(uid)
 
-    uid = query.from_user.id
-    state = user_test[uid]
+    if not state:
+        return
 
-    ans = query.data
-    correct = state["current"]["a"]
+    user_answer = update.message.text.strip().lower()
+    correct = state["current"]["a"].lower()
 
-    if ans == correct:
+    if user_answer == correct:
         state["correct"] += 1
-    else:
-        state["wrong"] += 1
 
     state["step"] += 1
 
     if state["step"] >= 10:
 
-        level = LEVELS[state["level_index"]]
-
         if state["correct"] >= 8:
-            final = LEVELS[min(state["level_index"] + 1, 3)]
+            new_level = LEVELS[min(state["level_index"] + 1, 3)]
         else:
-            final = level
+            new_level = LEVELS[state["level_index"]]
 
-        users[str(uid)]["level"] = final
+        users[str(uid)]["level"] = new_level
         save_users(users)
 
         del user_test[uid]
 
-        await query.message.reply_text(
-            f"📊 سطح شما: {final}",
+        await update.message.reply_text(
+            f"📊 سطح شما: {new_level}",
             reply_markup=main_menu()
         )
         return
 
-    await send_q(query)
+    await send_question(update)
 
-# 🔙 BACK BUTTON
-async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 🔁 CALLBACK HANDLER
+async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    await query.message.reply_text("🏠 منوی اصلی", reply_markup=main_menu())
+    data = query.data
 
-# 🧠 ROUTER
-async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 🏠 HOME
+    if data == "home":
+        await query.message.reply_text("🏠 منو:", reply_markup=main_menu())
 
-    query = update.callback_query
+    # 📘 EXAMPLE
+    elif data == "example":
+        await query.message.reply_text(
+            f"💡 مثال:\nDas {last_word.get(str(query.from_user.id), '')} ist gut.\n→ مثال ساخته شد"
+        )
 
-    if query.data == "start_test":
+    # 🎓 AUSBILDUNG
+    elif data == "ausbildung":
+        await query.message.reply_text(f"🎓 اوسبیلدونگ:\n{AUSBILDUNG_LINK}")
+
+    # ⚙️ ADMIN PANEL
+    elif data == "admin":
+        if query.from_user.id == ADMIN_ID:
+            await query.message.reply_text(admin_stats())
+        else:
+            await query.message.reply_text("❌ دسترسی ندارید")
+
+    # 📊 TEST START
+    elif data == "start_test":
         await start_test(update, context)
 
-    elif query.data == "back":
-        await back(update, context)
-
     else:
-        await check(update, context)
+        await check_answer(update, context)
 
-# 🚀 RUN BOT
+# 📊 ADMIN STATS
+def admin_stats():
+
+    total = len(users)
+    levels = {"A1":0,"A2":0,"B1":0,"B2":0}
+
+    for u in users.values():
+        lvl = u.get("level")
+        if lvl in levels:
+            levels[lvl] += 1
+
+    return f"""
+📊 آمار ربات:
+
+👥 کاربران: {total}
+
+🟢 A1: {levels['A1']}
+🟡 A2: {levels['A2']}
+🟠 B1: {levels['B1']}
+🔴 B2: {levels['B2']}
+"""
+
+# 🚀 RUN
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -242,6 +279,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
 
     app.run_polling()
 
