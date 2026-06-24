@@ -1,1 +1,2 @@
-python-telegram-bot==13.15
+import os
+TOKEN = os.getenv("7988767140:AAG5xCMgbY02PS7WJhF58l1-ohrqQb3rZvU")
