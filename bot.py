@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from openai import OpenAI
@@ -24,11 +25,38 @@ def save_users(data):
     json.dump(data, open(USERS_FILE, "w"))
 
 users = load_users()
+
 user_test = {}
-last_word = {}
+broadcast_mode = {}
 
 # 🎓 LINKS
 AUSBILDUNG_LINK = "https://t.me/+TFAMe1OSiBhmZDhk"
+
+# 📚 DAILY WORDS
+DAILY_WORDS = {
+    "A1": ["Haus = خانه", "Buch = کتاب", "Wasser = آب"],
+    "A2": ["Ich bin müde = من خسته هستم", "Heute ist schön = امروز خوب است"],
+    "B1": ["weil ich keine Zeit habe = چون وقت ندارم"],
+    "B2": ["Je mehr ich lerne, desto besser werde ich = هرچی بیشتر یاد بگیرم بهتر میشم"]
+}
+
+LEVELS = ["A1", "A2", "B1", "B2"]
+
+QUESTIONS = {
+    "A1": [
+        {"q": "Haus یعنی چی؟", "a": "خانه"},
+        {"q": "Buch یعنی چی؟", "a": "کتاب"},
+    ],
+    "A2": [
+        {"q": "Ich bin müde یعنی چی؟", "a": "من خسته هستم"},
+    ],
+    "B1": [
+        {"q": "weil یعنی چی؟", "a": "چون"},
+    ],
+    "B2": [
+        {"q": "Wenn ich Zeit hätte یعنی چی؟", "a": "اگر وقت داشتم می‌آمدم"},
+    ]
+}
 
 # 🧭 MAIN MENU
 def main_menu():
@@ -49,7 +77,7 @@ def main_menu():
         ],
 
         [
-            InlineKeyboardButton("🧪 آمادگی آزمون", callback_data="exam"),
+            InlineKeyboardButton("🧪 آزمون", callback_data="start_test"),
             InlineKeyboardButton("📊 تعیین سطح", callback_data="start_test")
         ],
 
@@ -61,20 +89,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = str(update.effective_user.id)
 
-    users[uid] = {
-        "name": update.effective_user.first_name,
-        "level": None
-    }
+    users[uid] = {"level": "A1"}
     save_users(users)
 
     await update.message.reply_text(
-        "👋 خوش آمدی 🇩🇪\n\n"
-        "✍️ هر چیزی بفرستی ترجمه می‌کنم (فارسی ↔ آلمانی)\n"
-        "📘 آرتیکل + جمع + مثال (با دکمه)",
+        "👋 خوش آمدی 🇩🇪\n"
+        "✍️ ترجمه + آموزش + آزمون هوشمند",
         reply_markup=main_menu()
     )
 
-# 🤖 AI TRANSLATION
+# 🤖 AI TRANSLATE
 def ai_translate(text):
 
     prompt = f"""
@@ -82,38 +106,39 @@ Translate Persian ↔ German.
 
 Text: {text}
 
-Return:
+ONLY:
 1. Translation
-2. Article (if noun)
-3. Plural (if noun)
-
-NO example sentence.
+2. Article
+3. Plural
+NO example
 """
 
     res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are Persian-German teacher."},
+            {"role": "system", "content": "German teacher"},
             {"role": "user", "content": prompt}
         ]
     )
 
     return res.choices[0].message.content
 
-# 💬 MESSAGE HANDLER
+# 💬 MESSAGE HANDLER (FIXED MODE SEPARATION)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = str(update.effective_user.id)
     text = update.message.text
 
     # 📩 send to admin
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📩 پیام کاربر {uid}:\n{text}"
-    )
+    await context.bot.send_message(ADMIN_ID, f"📩 {uid}: {text}")
 
+    # 🚨 IF USER IN TEST MODE
+    if uid in user_test:
+        await check_answer(update, context)
+        return
+
+    # 🤖 TRANSLATION MODE
     result = ai_translate(text)
-    last_word[uid] = text
 
     keyboard = InlineKeyboardMarkup([
         [
@@ -124,45 +149,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-# 📊 SMART TEST
-LEVELS = ["A1", "A2", "B1", "B2"]
-
-QUESTIONS = {
-    "A1": [
-        {"q": "Haus یعنی چی؟", "a": "خانه"},
-        {"q": "Buch یعنی چی؟", "a": "کتاب"},
-    ],
-    "A2": [
-        {"q": "Ich bin müde یعنی چی؟", "a": "من خسته هستم"},
-    ],
-    "B1": [
-        {"q": "weil یعنی چی؟", "a": "چون"},
-    ],
-    "B2": [
-        {"q": "Wenn ich Zeit hätte...", "a": "اگر وقت داشتم می‌آمدم"},
-    ]
-}
-
 # 🎯 START TEST
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    uid = query.from_user.id
+    uid = str(query.from_user.id)
 
     user_test[uid] = {
         "level_index": 0,
         "step": 0,
-        "correct": 0
+        "correct": 0,
+        "current": None
     }
 
     await send_question(query)
 
-# ❓ QUESTION
+# ❓ SEND QUESTION
 async def send_question(update):
 
-    uid = update.from_user.id
+    uid = str(update.from_user.id)
     state = user_test[uid]
 
     level = LEVELS[state["level_index"]]
@@ -170,20 +177,22 @@ async def send_question(update):
 
     state["current"] = q
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
-    ])
+    await update.message.reply_text(
+        f"📊 سوال:\n\n{q['q']}\n\n✍️ جواب را تایپ کن:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
+        ])
+    )
 
-    await update.message.reply_text(q["q"], reply_markup=keyboard)
-
-# 📊 CHECK ANSWER
+# 📊 CHECK ANSWER (FIXED)
 async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = update.effective_user.id
-    state = user_test.get(uid)
+    uid = str(update.effective_user.id)
 
-    if not state:
+    if uid not in user_test:
         return
+
+    state = user_test[uid]
 
     user_answer = update.message.text.strip().lower()
     correct = state["current"]["a"].lower()
@@ -193,6 +202,7 @@ async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state["step"] += 1
 
+    # 📈 END TEST
     if state["step"] >= 10:
 
         if state["correct"] >= 8:
@@ -200,7 +210,7 @@ async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             new_level = LEVELS[state["level_index"]]
 
-        users[str(uid)]["level"] = new_level
+        users[uid]["level"] = new_level
         save_users(users)
 
         del user_test[uid]
@@ -213,45 +223,38 @@ async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await send_question(update)
 
-# 🔁 CALLBACK HANDLER
-async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 🎓 DAILY WORD SYSTEM
+async def send_daily_words(app):
 
-    query = update.callback_query
-    await query.answer()
+    while True:
 
-    data = query.data
+        for uid, data in users.items():
 
-    # 🏠 HOME
-    if data == "home":
-        await query.message.reply_text("🏠 منو:", reply_markup=main_menu())
+            try:
+                level = data.get("level", "A1")
+                words = DAILY_WORDS.get(level, DAILY_WORDS["A1"])
+                word = random.choice(words)
 
-    # 📘 EXAMPLE
-    elif data == "example":
-        await query.message.reply_text(
-            f"💡 مثال:\nDas {last_word.get(str(query.from_user.id), '')} ist gut.\n→ مثال ساخته شد"
-        )
+                await app.bot.send_message(
+                    chat_id=int(uid),
+                    text=f"📚 لغت امروز ({level}):\n\n{word}"
+                )
 
-    # 🎓 AUSBILDUNG
-    elif data == "ausbildung":
-        await query.message.reply_text(f"🎓 اوسبیلدونگ:\n{AUSBILDUNG_LINK}")
+            except:
+                pass
 
-    # ⚙️ ADMIN PANEL
-    elif data == "admin":
-        if query.from_user.id == ADMIN_ID:
-            await query.message.reply_text(admin_stats())
-        else:
-            await query.message.reply_text("❌ دسترسی ندارید")
+        await asyncio.sleep(86400)  # 24h
 
-    # 📊 TEST START
-    elif data == "start_test":
-        await start_test(update, context)
+# 📊 ADMIN PANEL
+def admin_panel():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 آمار", callback_data="stats")],
+        [InlineKeyboardButton("📢 پیام همگانی", callback_data="broadcast")],
+        [InlineKeyboardButton("🔙 برگشت", callback_data="home")]
+    ])
 
-    else:
-        await check_answer(update, context)
-
-# 📊 ADMIN STATS
-def admin_stats():
-
+# 📊 STATS
+def stats():
     total = len(users)
     levels = {"A1":0,"A2":0,"B1":0,"B2":0}
 
@@ -261,7 +264,7 @@ def admin_stats():
             levels[lvl] += 1
 
     return f"""
-📊 آمار ربات:
+📊 آمار:
 
 👥 کاربران: {total}
 
@@ -271,6 +274,58 @@ def admin_stats():
 🔴 B2: {levels['B2']}
 """
 
+# 🔁 CALLBACK
+async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    uid = str(query.from_user.id)
+    data = query.data
+
+    if data == "home":
+        await query.message.reply_text("🏠 منو:", reply_markup=main_menu())
+
+    elif data == "example":
+        await query.message.reply_text("💡 مثال: Das Auto ist schnell.")
+
+    elif data == "ausbildung":
+        await query.message.reply_text(f"🎓 اوسبیلدونگ:\n{AUSBILDUNG_LINK}")
+
+    elif data == "admin":
+        if query.from_user.id == ADMIN_ID:
+            await query.message.reply_text(stats(), reply_markup=admin_panel())
+        else:
+            await query.message.reply_text("❌ دسترسی ندارید")
+
+    elif data == "stats":
+        await query.message.reply_text(stats())
+
+    elif data == "broadcast":
+        context.user_data["broadcast"] = True
+        await query.message.reply_text("✍️ پیام همگانی را ارسال کنید:")
+
+    elif data == "start_test":
+        await start_test(update, context)
+
+# 📢 BROADCAST HANDLER
+async def admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if context.user_data.get("broadcast"):
+        text = update.message.text
+
+        for uid in users.keys():
+            try:
+                await context.bot.send_message(int(uid), text)
+            except:
+                pass
+
+        context.user_data["broadcast"] = False
+        await update.message.reply_text("✅ ارسال شد")
+
 # 🚀 RUN
 def main():
 
@@ -278,8 +333,13 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(router))
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_message))
+
+    # 🔥 DAILY SYSTEM START
+    asyncio.create_task(send_daily_words(app))
 
     app.run_polling()
 
