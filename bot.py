@@ -3,7 +3,14 @@ import threading
 from flask import Flask
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
 
 from openai import OpenAI
 
@@ -16,7 +23,7 @@ ADMIN_ID = 744748269
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-# 🌐 KEEP ALIVE SERVER (برای جلوگیری از Sleep در Render)
+# 🌐 FLASK KEEP ALIVE (FIXED FOR RENDER)
 app = Flask(__name__)
 
 @app.route("/")
@@ -24,7 +31,8 @@ def home():
     return "bot is alive"
 
 def run():
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 threading.Thread(target=run).start()
 
@@ -101,7 +109,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 🤖 AI TRANSLATE (FIXED + SAFE)
+# 🤖 AI TRANSLATE (FIXED FORMAT + PERSIAN REQUIRED)
 def ai_translate(text):
 
     try:
@@ -114,9 +122,9 @@ Return EXACT format:
 
 German word
 Article + word
-Plural form
-Persian meaning (ALWAYS REQUIRED)
-Persian pronunciation (ONE LINE)
+Plural
+Persian meaning (MUST BE INCLUDED)
+Persian pronunciation (ONE LINE ONLY)
 Example sentence (German + Persian meaning)
 
 WORD: {text}
@@ -127,7 +135,7 @@ WORD: {text}
         return res.choices[0].message.content
 
     except:
-        return "❌ خطا در پردازش"
+        return "❌ خطا در دریافت پاسخ"
 
 
 # 📘 EXAMPLE
@@ -151,10 +159,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
+    # 🚫 ignore commands
     if text.startswith("/"):
         return
 
-    # 🔐 ACCESS CHECK
+    # 🔐 ACCESS CHECK (no real membership check)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -167,7 +176,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📘 مثال", callback_data=f"example:{text}")],
+        [InlineKeyboardButton("📘 مثال", callback_data=f"example:{text[:20]}")],
         [InlineKeyboardButton("🔙 برگشت", callback_data="back")]
     ])
 
@@ -193,21 +202,25 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    # ✅ JOIN
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
         await query.message.reply_text("✅ فعال شد")
 
+    # 📘 EXAMPLE
     elif data.startswith("example:"):
 
         word = data.split(":", 1)[1]
         ex = ai_example(word)
         await query.message.reply_text(ex)
 
+    # 🔙 BACK
     elif data == "back":
 
         await query.message.reply_text("🏠 منو اصلی", reply_markup=main_menu())
 
+    # 👨‍💼 ADMIN
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
