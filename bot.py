@@ -3,7 +3,6 @@ import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from openai import OpenAI
-from gtts import gTTS
 
 # 🔑 CONFIG
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -14,7 +13,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
 
-# 📦 USERS
+# 📦 USERS DB
 def load_users():
     if os.path.exists(USERS_FILE):
         return json.load(open(USERS_FILE))
@@ -59,8 +58,12 @@ def main_menu():
         ]
     ])
 
-# 🚀 START (SAFE)
+# 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    uid = str(update.effective_user.id)
+    users[uid] = {"level": "A1"}
+    save_users(users)
 
     await update.message.reply_text(
         "🇩🇪 خوش آمدی به ربات آلمانی هوشمند\n\n"
@@ -68,7 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 TRANSLATION AI
+# 🤖 TRANSLATION (NO VOICE + PERSIAN PRONUNCIATION)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -82,10 +85,12 @@ If word:
 - German word
 - article
 - plural
-- pronunciation (FA + EN)
+- Persian meaning
+- Persian pronunciation (phonetic writing)
 
 If sentence:
 - full translation
+- Persian pronunciation of German words
 
 TEXT: {text}
 """
@@ -94,28 +99,24 @@ TEXT: {text}
 
     return res.choices[0].message.content
 
-# 📘 EXAMPLE AI
+# 📘 EXAMPLE
 def ai_example(word):
 
     res = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Make 1 simple German sentence + Persian meaning: {word}"
+            "content": f"""
+Make 1 simple German sentence + Persian meaning.
+
+WORD: {word}
+"""
         }]
     )
 
     return res.choices[0].message.content
 
-# 🎤 SAFE VOICE
-def make_voice(text, uid):
-
-    filename = f"voice_{uid}.mp3"
-    tts = gTTS(text=text, lang="de")
-    tts.save(filename)
-    return filename
-
-# 💬 HANDLE MESSAGE
+# 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
@@ -128,14 +129,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 🎤 SAFE VOICE (NO CRASH)
-    try:
-        voice_file = make_voice(text, update.effective_user.id)
-        await update.message.reply_voice(voice=open(voice_file, "rb"))
-    except Exception as e:
-        print("VOICE ERROR:", e)
-
-# 🔁 CALLBACK ROUTER (ALL IN ONE)
+# 🔁 CALLBACK ROUTER
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -151,18 +145,18 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text(f"📘 مثال:\n\n{ex}")
 
-    # 📊 ADMIN STATS
+    # 👨‍💼 ADMIN STATS
     elif data == "stats" and query.from_user.id == ADMIN_ID:
         await query.message.reply_text(f"📊 کاربران: {len(users)}")
 
-    # 👥 USERS
+    # 👥 USERS LIST
     elif data == "users" and query.from_user.id == ADMIN_ID:
         text = "\n".join(list(users.keys())[:20])
         await query.message.reply_text(f"👥 کاربران:\n{text}")
 
     # 📢 BROADCAST INFO
     elif data == "broadcast" and query.from_user.id == ADMIN_ID:
-        await query.message.reply_text("📢 دستور:\n/broadcast پیام")
+        await query.message.reply_text("📢 /broadcast پیام")
 
 # 👨‍💼 ADMIN PANEL
 def admin_panel():
