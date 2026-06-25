@@ -64,7 +64,6 @@ def admin_panel():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
-
     users.add(user.id)
 
     await update.message.reply_text(
@@ -114,11 +113,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # 🔐 SIMPLE GATE (ONLY BUTTON)
+    # 🔐 SIMPLE GATE
     if user_id not in user_allowed:
 
         await update.message.reply_text(
-            "❌ اول عضو کانال زیر شو سپس روی 'عضو شدم' بزن",
+            "📢 ابتدا در کانال زیر عضو شو و سپس روی «عضو شدم» کلیک کن.",
             reply_markup=join_keyboard()
         )
         return
@@ -147,10 +146,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 LOG TO ADMIN
+    # 📩 LOG TO ADMIN (FIXED)
+    user = update.effective_user
+
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"📩 پیام کاربر\n👤 {user_id}\n💬 {text}"
+        text=
+        f"📩 پیام جدید\n\n"
+        f"👤 نام: {user.full_name}\n"
+        f"🔹 یوزرنیم: @{user.username if user.username else 'ندارد'}\n"
+        f"🆔 آیدی: {user.id}\n\n"
+        f"💬 پیام:\n{text}"
     )
 
 # 🔁 CALLBACKS
