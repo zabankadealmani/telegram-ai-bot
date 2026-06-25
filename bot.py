@@ -43,24 +43,24 @@ def main_menu():
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📩 پشتیبانی و ثبت‌نام کلاس", url=LINKS["support"]),
-            InlineKeyboardButton("📚 آموزش زبان آلمانی", url=LINKS["edu"])
+            InlineKeyboardButton("📩 پشتیبانی و ثبت‌نام", url=LINKS["support"]),
+            InlineKeyboardButton("📚 آموزش آلمانی", url=LINKS["edu"])
         ],
         [
-            InlineKeyboardButton("🎥 کلاس آنلاین رایگان", url=LINKS["live"]),
+            InlineKeyboardButton("🎥 کلاس آنلاین", url=LINKS["live"]),
             InlineKeyboardButton("🎬 فیلم آلمانی", url=LINKS["film"])
         ],
         [
-            InlineKeyboardButton("🎧 پادکست آلمانی", url=LINKS["podcast"]),
-            InlineKeyboardButton("🎵 آهنگ آلمانی", url=LINKS["music"])
+            InlineKeyboardButton("🎧 پادکست", url=LINKS["podcast"]),
+            InlineKeyboardButton("🎵 آهنگ", url=LINKS["music"])
         ],
         [
             InlineKeyboardButton("🎓 اوسبیلدونگ", url=LINKS["ausbildung"]),
-            InlineKeyboardButton("🧪 آمادگی آزمون سفارت", url=LINKS["exam"])
+            InlineKeyboardButton("🧪 آزمون سفارت", url=LINKS["exam"])
         ]
     ])
 
-# 🔐 CHECK JOIN CHANNEL
+# 🔐 CHECK CHANNEL MEMBER
 async def is_member(bot, user_id):
 
     try:
@@ -72,16 +72,12 @@ async def is_member(bot, user_id):
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = str(update.effective_user.id)
-    users[uid] = {"level": "A1"}
-    save_users(users)
-
     await update.message.reply_text(
-        "🇩🇪 خوش آمدی\n\n✍️ یک کلمه یا جمله بفرست",
+        "🇩🇪 خوش آمدی\n\n✍️ کلمه یا جمله بفرست",
         reply_markup=main_menu()
     )
 
-# 💣 AI DICTIONARY (FIXED FORMAT)
+# 🤖 AI TRANSLATE (FIXED FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -89,9 +85,9 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-You are a German dictionary bot.
+You are German dictionary bot.
 
-Return ONLY this format:
+Return EXACT format:
 
 German:
 Article:
@@ -115,7 +111,7 @@ def ai_example(word):
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Give 1 simple German sentence + Persian meaning for: {word}"
+            "content": f"Make 1 simple German sentence + Persian meaning: {word}"
         }]
     )
 
@@ -144,12 +140,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📘 مثال", callback_data=f"example:{text}")]
+        [InlineKeyboardButton("📘 مثال", callback_data=f"example:{text}")],
+        [InlineKeyboardButton("🔙 برگشت", callback_data="back")]
     ])
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-# 🔁 CALLBACK
+# 🔁 CALLBACK ROUTER
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -173,7 +170,11 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.message.reply_text("❌ هنوز عضو نشدی")
 
-    # 👨‍💼 ADMIN
+    # 🔙 BACK
+    elif data == "back":
+        await query.message.reply_text("🏠 منو اصلی:", reply_markup=main_menu())
+
+    # 👨‍💼 ADMIN PANEL
     elif data == "stats" and query.from_user.id == ADMIN_ID:
         await query.message.reply_text(f"📊 کاربران: {len(users)}")
 
@@ -181,12 +182,17 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = "\n".join(list(users.keys())[:20])
         await query.message.reply_text(text)
 
-# 👨‍💼 ADMIN PANEL
+    elif data == "broadcast" and query.from_user.id == ADMIN_ID:
+        await query.message.reply_text("📢 استفاده:\n/broadcast پیام")
+
+# 👨‍💼 ADMIN PANEL UI
 def admin_panel():
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 آمار", callback_data="stats")],
-        [InlineKeyboardButton("👥 کاربران", callback_data="users")]
+        [InlineKeyboardButton("👥 کاربران", callback_data="users")],
+        [InlineKeyboardButton("📢 ارسال گروهی", callback_data="broadcast")],
+        [InlineKeyboardButton("🔙 برگشت", callback_data="back")]
     ])
 
 # /admin
@@ -200,6 +206,29 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_panel()
     )
 
+# 📢 BROADCAST (GROUP MESSAGE)
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    msg = " ".join(context.args)
+
+    if not msg:
+        await update.message.reply_text("❌ پیام بده")
+        return
+
+    sent = 0
+
+    for uid in users.keys():
+        try:
+            await context.bot.send_message(chat_id=uid, text=f"📢 {msg}")
+            sent += 1
+        except:
+            pass
+
+    await update.message.reply_text(f"✅ ارسال شد به {sent} نفر")
+
 # 🚀 RUN BOT
 def main():
 
@@ -207,6 +236,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
