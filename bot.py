@@ -25,7 +25,7 @@ def main_menu():
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📩 پشتیبانی Ketabun", url="https://t.me/Ketabun"),
+            InlineKeyboardButton("📩 پشتیبانی و ثبت نام کلاس", url="https://t.me/Ketabun"),
             InlineKeyboardButton("📚 آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
         ],
         [
