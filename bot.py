@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI (FIXED FORMAT)
+# 🤖 AI TRANSLATE (FIXED FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -112,7 +112,7 @@ def ai_example(word):
 
     return res.choices[0].message.content
 
-# 💬 MESSAGE HANDLER (FULL FIX)
+# 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
@@ -123,7 +123,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.startswith("/"):
         return
 
-    # 🔐 GATE (NO REAL CHECK)
+    # 🔐 SIMPLE ACCESS (NO REAL CHECK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -142,7 +142,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 ADMIN LOG (CLEAN)
+    # 📩 ADMIN LOG
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=
@@ -206,9 +206,9 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data == "broadcast":
 
-            await query.message.reply_text("📢 /broadcast پیام")
+            await query.message.reply_text("📢 پیام خود را بفرست")
 
-# 📢 BROADCAST (FIXED & CLEAN)
+# 📢 BROADCAST (FIXED 100%)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
