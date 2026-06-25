@@ -7,8 +7,8 @@ from openai import OpenAI
 # 🔑 CONFIG
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_ID = 744748269
 
+ADMIN_ID = 744748269
 CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -107,8 +107,9 @@ def ai_example(word):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
+    text = update.message.text
 
-    # 🔐 FORCE JOIN (simple system)
+    # 🔐 FORCE JOIN (simple)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -117,7 +118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    text = update.message.text
+    # 🤖 AI RESPONSE
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
@@ -127,6 +128,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
+    # 👨‍💼 SEND COPY TO ADMIN
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"📩 پیام کاربر\n\n👤 ID: {user_id}\n💬 Text: {text}"
+    )
+
 # 🔁 CALLBACK ROUTER
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -135,7 +142,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN CONFIRM (manual)
+    # ✅ JOIN CONFIRM
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
@@ -157,7 +164,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 👨‍💼 ADMIN STATS
     elif data == "stats" and query.from_user.id == ADMIN_ID:
 
-        await query.message.reply_text(f"📊 کاربران: {len(users)}")
+        await query.message.reply_text(f"📊 تعداد کاربران: {len(users)}")
 
     # 👥 USERS LIST
     elif data == "users" and query.from_user.id == ADMIN_ID:
@@ -168,7 +175,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 📢 BROADCAST MENU
     elif data == "broadcast" and query.from_user.id == ADMIN_ID:
 
-        await query.message.reply_text("📢 دستور:\n/broadcast پیام")
+        await query.message.reply_text("📢 استفاده:\n/broadcast پیام")
 
 # 📢 BROADCAST COMMAND
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
