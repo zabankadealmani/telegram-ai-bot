@@ -42,7 +42,7 @@ def main_menu():
         ]
     ])
 
-# 🔐 JOIN BUTTON (IMPORTANT)
+# 🔐 JOIN BUTTON
 def join_keyboard():
 
     return InlineKeyboardMarkup([
@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI (FIXED: meaning + pronunciation always)
+# 🤖 AI (FIXED PERSIAN + FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -85,13 +85,15 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Return EXACT format (VERY IMPORTANT):
+You MUST ALWAYS return Persian translation.
+
+Return EXACT format:
 
 German word
 Article + word
-Plural form
-Persian meaning (ALWAYS REQUIRED - NEVER EMPTY)
-Persian pronunciation (ONE LINE ONLY)
+Plural
+Persian meaning (IMPORTANT - MUST NOT BE EMPTY)
+Persian pronunciation (ONLY ONE LINE)
 Example sentence (German + Persian meaning)
 
 WORD: {text}
@@ -124,7 +126,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.startswith("/"):
         return
 
-    # 🔐 ACCESS CHECK (ONLY BUTTON SYSTEM)
+    # 🔐 ACCESS GATE (NO REAL CHECK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -162,7 +164,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN BUTTON
+    # ✅ JOIN
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
@@ -209,7 +211,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await query.message.reply_text("📢 /broadcast پیام")
 
-# 📢 BROADCAST (SAFE + WORKING)
+# 📢 BROADCAST (FIXED)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
