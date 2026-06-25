@@ -25,7 +25,7 @@ def main_menu():
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📩 پشتیبانی و ثبت نام کلاس", url="https://t.me/Ketabun"),
+            InlineKeyboardButton("📩 پشتیبانی Ketabun", url="https://t.me/Ketabun"),
             InlineKeyboardButton("📚 آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
         ],
         [
@@ -119,7 +119,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🔐 SIMPLE GATE (NO REAL CHECK)
+    # 🚫 جلوگیری از قاطی شدن broadcast
+    if text.startswith("/broadcast"):
+        return
+
+    # 🔐 SIMPLE GATE (NO REAL JOIN CHECK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -127,19 +131,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=join_keyboard()
         )
         return
-
-    # 👨‍💼 ADMIN MESSAGE COPY (FIXED)
-    if user_id in user_allowed:
-
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=
-            f"📩 پیام جدید\n\n"
-            f"👤 نام: {user.full_name}\n"
-            f"🔹 یوزرنیم: @{user.username if user.username else 'ندارد'}\n"
-            f"🆔 آیدی: {user.id}\n\n"
-            f"💬 پیام:\n{text}"
-        )
 
     # 🤖 AI RESPONSE
     result = ai_translate(text)
@@ -151,6 +142,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
+    # 📩 LOG TO ADMIN (FIXED)
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=
+        f"📩 پیام جدید\n\n"
+        f"👤 نام: {user.full_name}\n"
+        f"🔹 یوزرنیم: @{user.username if user.username else 'ندارد'}\n"
+        f"🆔 آیدی: {user.id}\n\n"
+        f"💬 پیام:\n{text}"
+    )
+
 # 🔁 CALLBACKS
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -159,7 +161,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN BUTTON (ONLY ACTIVATE)
+    # ✅ JOIN BUTTON
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
@@ -179,7 +181,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text("🏠 منو اصلی", reply_markup=main_menu())
 
-    # 👨‍💼 ADMIN
+    # 👨‍💼 ADMIN PANEL
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
@@ -206,7 +208,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await query.message.reply_text("📢 /broadcast پیام")
 
-# 📢 BROADCAST
+# 📢 BROADCAST (FIXED)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
@@ -230,7 +232,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ ارسال شد به {sent}")
 
-# 🚀 RUN
+# 🚀 RUN BOT
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -238,6 +240,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("admin", lambda u, c: u.message.reply_text("👨‍💼 پنل", reply_markup=admin_panel())))
+
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
