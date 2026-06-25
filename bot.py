@@ -1,26 +1,52 @@
 import os
+import threading
+from flask import Flask
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
+
 from openai import OpenAI
+
 
 # 🔑 CONFIG
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 ADMIN_ID = 744748269
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # 🔗 LINKS
 CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
 ONLINE_CLASS_LINK = "https://t.me/+Gq6nK-16B7Y2OTk0"
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+
+# 🌐 KEEP ALIVE SERVER (Render fix)
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "bot alive"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+threading.Thread(target=run).start()
+
 
 # 📦 DATABASE
 users = set()
 user_allowed = set()
 users_info = {}
 
-# 🧭 MAIN MENU
+
+# 🧭 MENU
 def main_menu():
 
     return InlineKeyboardMarkup([
@@ -42,6 +68,7 @@ def main_menu():
         ]
     ])
 
+
 # 🔐 JOIN BUTTON
 def join_keyboard():
 
@@ -49,6 +76,7 @@ def join_keyboard():
         [InlineKeyboardButton("📢 ورود به کانال", url=CHANNEL_LINK)],
         [InlineKeyboardButton("✅ عضو شدم", callback_data="check_join")]
     ])
+
 
 # 👨‍💼 ADMIN PANEL
 def admin_panel():
@@ -59,6 +87,7 @@ def admin_panel():
         [InlineKeyboardButton("📢 پیام گروهی", callback_data="broadcast")],
         [InlineKeyboardButton("🔙 برگشت", callback_data="back")]
     ])
+
 
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,31 +106,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI (FIXED PERSIAN + FORMAT)
+
+# 🤖 AI (FIXED: ALWAYS PERSIAN)
 def ai_translate(text):
 
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{
-            "role": "user",
-            "content": f"""
-You MUST ALWAYS return Persian translation.
-
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": f"""
 Return EXACT format:
 
 German word
 Article + word
 Plural
-Persian meaning (IMPORTANT - MUST NOT BE EMPTY)
-Persian pronunciation (ONLY ONE LINE)
+Persian meaning (MANDATORY)
+Persian pronunciation (ONE LINE)
 Example sentence (German + Persian meaning)
 
 WORD: {text}
 """
-        }]
-    )
+            }]
+        )
 
-    return res.choices[0].message.content
+        return res.choices[0].message.content
+
+    except:
+        return "❌ خطا در دریافت اطلاعات"
+
 
 def ai_example(word):
 
@@ -115,6 +148,7 @@ def ai_example(word):
 
     return res.choices[0].message.content
 
+
 # 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -122,11 +156,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🚫 BLOCK COMMANDS
+    # 🚫 ignore commands
     if text.startswith("/"):
         return
 
-    # 🔐 ACCESS GATE (NO REAL CHECK)
+    # 🔐 JOIN CHECK
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -145,7 +179,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 ADMIN LOG
+    # 📩 LOG ADMIN
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=
@@ -155,6 +189,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 آیدی: {user.id}\n\n"
         f"💬 پیام:\n{text}"
     )
+
 
 # 🔁 CALLBACKS
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,7 +203,6 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
-
         await query.message.reply_text("✅ فعال شد")
 
     # 📘 EXAMPLE
@@ -176,7 +210,6 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         word = data.split(":", 1)[1]
         ex = ai_example(word)
-
         await query.message.reply_text(ex)
 
     # 🔙 BACK
@@ -188,7 +221,6 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
-
             await query.message.reply_text(f"📊 کاربران: {len(users)}")
 
         elif data == "users":
@@ -208,10 +240,10 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(text[:4000])
 
         elif data == "broadcast":
-
             await query.message.reply_text("📢 /broadcast پیام")
 
-# 📢 BROADCAST (FIXED)
+
+# 📢 BROADCAST
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
@@ -235,19 +267,21 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ ارسال شد به {sent}")
 
-# 🚀 RUN BOT
+
+# 🚀 MAIN
 def main():
 
-    app = Application.builder().token(TOKEN).build()
+    app_bot = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("admin", lambda u, c: u.message.reply_text("👨‍💼 پنل", reply_markup=admin_panel())))
+    app_bot.add_handler(CommandHandler("start", start))
+    app_bot.add_handler(CommandHandler("broadcast", broadcast))
+    app_bot.add_handler(CommandHandler("admin", lambda u, c: u.message.reply_text("👨‍💼 پنل", reply_markup=admin_panel())))
 
-    app.add_handler(CallbackQueryHandler(router))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app_bot.add_handler(CallbackQueryHandler(router))
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    app.run_polling()
+    app_bot.run_polling()
+
 
 if __name__ == "__main__":
     main()
