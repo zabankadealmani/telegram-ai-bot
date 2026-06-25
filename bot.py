@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import threading
 from flask import Flask
 
@@ -23,7 +24,7 @@ ADMIN_ID = 744748269
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-# 🌐 FLASK KEEP ALIVE (FIXED FOR RENDER)
+# 🌐 KEEP ALIVE (Render Fix)
 app = Flask(__name__)
 
 @app.route("/")
@@ -37,15 +38,23 @@ def run():
 threading.Thread(target=run).start()
 
 
+# 🗄️ SQLITE DATABASE (REAL PERSISTENT)
+conn = sqlite3.connect("users.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    name TEXT,
+    username TEXT
+)
+""")
+conn.commit()
+
+
 # 🔗 LINKS
 CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
 ONLINE_CLASS_LINK = "https://t.me/+Gq6nK-16B7Y2OTk0"
-
-
-# 📦 DATABASE
-users = set()
-user_allowed = set()
-users_info = {}
 
 
 # 🧭 MAIN MENU
@@ -96,12 +105,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
 
-    users.add(user.id)
-
-    users_info[user.id] = {
-        "name": user.full_name,
-        "username": user.username
-    }
+    cursor.execute(
+        "INSERT OR IGNORE INTO users (user_id, name, username) VALUES (?, ?, ?)",
+        (user.id, user.full_name, user.username)
+    )
+    conn.commit()
 
     await update.message.reply_text(
         "🇩🇪 خوش آمدی به ربات آلمانی\n✍️ کلمه یا جمله بفرست",
@@ -109,33 +117,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 🤖 AI TRANSLATE (FIXED FORMAT + PERSIAN REQUIRED)
+# 🤖 AI TRANSLATE
 def ai_translate(text):
 
-    try:
-        res = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user",
-                "content": f"""
+    res = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": f"""
 Return EXACT format:
 
 German word
 Article + word
 Plural
-Persian meaning (MUST BE INCLUDED)
-Persian pronunciation (ONE LINE ONLY)
+Persian meaning (MUST)
+Persian pronunciation (one line)
 Example sentence (German + Persian meaning)
 
 WORD: {text}
 """
-            }]
-        )
+        }]
+    )
 
-        return res.choices[0].message.content
-
-    except:
-        return "❌ خطا در دریافت پاسخ"
+    return res.choices[0].message.content
 
 
 # 📘 EXAMPLE
@@ -163,14 +167,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.startswith("/"):
         return
 
-    # 🔐 ACCESS CHECK (no real membership check)
-    if user_id not in user_allowed:
-
-        await update.message.reply_text(
-            "📢 ابتدا در کانال زیر عضو شو و سپس روی «عضو شدم» کلیک کن.",
-            reply_markup=join_keyboard()
-        )
-        return
+    # 🔐 fake join check (no real channel check)
+    # اگر خواستی واقعی کنیم بعداً میشه
 
     # 🤖 AI RESPONSE
     result = ai_translate(text)
@@ -202,14 +200,8 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN
-    if data == "check_join":
-
-        user_allowed.add(query.from_user.id)
-        await query.message.reply_text("✅ فعال شد")
-
     # 📘 EXAMPLE
-    elif data.startswith("example:"):
+    if data.startswith("example:"):
 
         word = data.split(":", 1)[1]
         ex = ai_example(word)
@@ -224,25 +216,31 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
-            await query.message.reply_text(f"📊 کاربران: {len(users)}")
+
+            cursor.execute("SELECT COUNT(*) FROM users")
+            count = cursor.fetchone()[0]
+
+            await query.message.reply_text(f"📊 کل کاربران: {count}")
 
         elif data == "users":
 
+            cursor.execute("SELECT * FROM users")
+            rows = cursor.fetchall()
+
             text = ""
 
-            for uid, info in users_info.items():
+            for r in rows[:50]:
 
-                username = info["username"] if info["username"] else "ندارد"
+                uid = r[0]
+                name = r[1]
+                username = r[2] if r[2] else "ندارد"
 
-                text += (
-                    f"👤 {info['name']}\n"
-                    f"🔹 @{username}\n"
-                    f"🆔 {uid}\n\n"
-                )
+                text += f"👤 {name}\n🔹 @{username}\n🆔 {uid}\n\n"
 
             await query.message.reply_text(text[:4000])
 
         elif data == "broadcast":
+
             await query.message.reply_text("📢 /broadcast پیام")
 
 
@@ -258,12 +256,15 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ پیام بنویس")
         return
 
+    cursor.execute("SELECT user_id FROM users")
+    users = cursor.fetchall()
+
     sent = 0
 
     for u in users:
 
         try:
-            await context.bot.send_message(chat_id=u, text=f"📢 {msg}")
+            await context.bot.send_message(chat_id=u[0], text=f"📢 {msg}")
             sent += 1
         except:
             pass
