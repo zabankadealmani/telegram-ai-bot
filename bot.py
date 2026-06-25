@@ -2,6 +2,7 @@ import os
 import json
 import random
 import tempfile
+import asyncio
 from gtts import gTTS
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -15,6 +16,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
 
+# 📦 DB
 def load_users():
     if os.path.exists(USERS_FILE):
         return json.load(open(USERS_FILE))
@@ -60,18 +62,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_users(users)
 
     await update.message.reply_text(
-        "👋 خوش آمدی 🇩🇪\n✍️ ترجمه + تلفظ + ویس",
+        "👋 خوش آمدی 🇩🇪\n✍️ ترجمه + مثال + ویس",
         reply_markup=main_menu()
     )
 
-# 🤖 TRANSLATION AI
+# 🤖 AI TRANSLATION (SAFE)
 def ai_translate(text):
 
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "German teacher"},
-            {"role": "user", "content": f"""
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "German teacher"},
+                {"role": "user", "content": f"""
 Translate Persian ↔ German.
 
 If word:
@@ -87,12 +90,30 @@ If sentence:
 NO examples
 {text}
 """}
-        ]
-    )
+            ]
+        )
+        return res.choices[0].message.content
 
-    return res.choices[0].message.content
+    except:
+        return "❌ خطا در ترجمه"
 
-# 🎤 MAKE VOICE (FREE gTTS)
+# 📘 EXAMPLE AI
+def ai_example(word):
+
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Make 1 simple German sentence + Persian meaning"},
+                {"role": "user", "content": word}
+            ]
+        )
+        return res.choices[0].message.content
+
+    except:
+        return "❌ خطا در مثال"
+
+# 🎤 VOICE (FREE gTTS)
 def make_voice(word):
 
     tts = gTTS(text=word, lang="de")
@@ -113,6 +134,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await check_answer(update, context)
         return
 
+    # 🤖 TRANSLATE
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
@@ -124,19 +146,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
 
     await update.message.reply_text(result, reply_markup=keyboard)
-
-# 📘 EXAMPLE AI
-def ai_example(word):
-
-    res = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Make 1 simple German sentence + Persian meaning"},
-            {"role": "user", "content": word}
-        ]
-    )
-
-    return res.choices[0].message.content
 
 # 🔁 CALLBACK
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -161,14 +170,13 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         audio = make_voice(word)
 
-        await query.message.reply_voice(
-            voice=open(audio, "rb")
-        )
+        with open(audio, "rb") as voice_file:
+            await query.message.reply_voice(voice=voice_file)
 
     elif data == "home":
         await query.message.reply_text("🏠 منو:", reply_markup=main_menu())
 
-# 🚀 RUN
+# 🚀 RUN BOT
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -177,6 +185,7 @@ def main():
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    print("Bot is running...")
     app.run_polling()
 
 if __name__ == "__main__":
