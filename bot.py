@@ -118,7 +118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in user_allowed:
 
         await update.message.reply_text(
-            "❌ اول روی 'عضو شدم' بزن",
+            "❌ اول عضو کانال زیر شو سپس روی 'عضو شدم' بزن",
             reply_markup=join_keyboard()
         )
         return
