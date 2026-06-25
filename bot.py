@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI
+# 🤖 AI TRANSLATE (FIXED FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -85,13 +85,13 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Return EXACT:
+Return EXACT format like this:
 
-German:
-Article:
-Plural:
-Pronunciation (Persian):
-Example:
+German word
+Article + word
+Plural
+Persian pronunciation (ONE LINE ONLY)
+Example sentence
 
 WORD: {text}
 """
@@ -100,6 +100,7 @@ WORD: {text}
 
     return res.choices[0].message.content
 
+# 📘 EXAMPLE
 def ai_example(word):
 
     res = client.chat.completions.create(
@@ -119,11 +120,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🚫 جلوگیری از قاطی شدن broadcast
+    # 🚫 STOP BROADCAST MIXING
     if text.startswith("/broadcast"):
         return
 
-    # 🔐 SIMPLE GATE (NO REAL JOIN CHECK)
+    # 🔐 GATE (NO REAL CHECK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -142,7 +143,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 LOG TO ADMIN (FIXED)
+    # 📩 ADMIN LOG (FIXED)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=
