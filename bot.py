@@ -1,17 +1,11 @@
 import os
+import json
 import sqlite3
 import threading
 from flask import Flask
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from openai import OpenAI
 
@@ -38,7 +32,7 @@ def run():
 threading.Thread(target=run).start()
 
 
-# 🗄️ SQLITE DATABASE (REAL PERSISTENT)
+# 🗄️ SQLITE DB (users)
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -50,6 +44,28 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 conn.commit()
+
+
+# 💾 PERSIST FAKE JOIN SYSTEM
+ALLOWED_FILE = "allowed.json"
+
+def load_allowed():
+    global user_allowed
+    try:
+        with open(ALLOWED_FILE, "r") as f:
+            user_allowed = set(json.load(f))
+    except:
+        user_allowed = set()
+
+def save_allowed():
+    with open(ALLOWED_FILE, "w") as f:
+        json.dump(list(user_allowed), f)
+
+
+# 🔐 MEMORY
+users_info = {}
+user_allowed = set()
+users = set()
 
 
 # 🔗 LINKS
@@ -80,7 +96,7 @@ def main_menu():
     ])
 
 
-# 🔐 JOIN BUTTON
+# 🔐 JOIN BUTTON (FAKE BUT STABLE)
 def join_keyboard():
 
     return InlineKeyboardMarkup([
@@ -100,10 +116,16 @@ def admin_panel():
     ])
 
 
+# 🚀 LOAD FAKE ACCESS
+load_allowed()
+
+
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
+
+    users.add(user.id)
 
     cursor.execute(
         "INSERT OR IGNORE INTO users (user_id, name, username) VALUES (?, ?, ?)",
@@ -130,9 +152,9 @@ Return EXACT format:
 German word
 Article + word
 Plural
-Persian meaning (MUST)
-Persian pronunciation (one line)
-Example sentence (German + Persian meaning)
+Persian meaning
+Persian pronunciation
+Example sentence + Persian meaning
 
 WORD: {text}
 """
@@ -167,8 +189,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text.startswith("/"):
         return
 
-    # 🔐 fake join check (no real channel check)
-    # اگر خواستی واقعی کنیم بعداً میشه
+    # 🔐 FAKE GATE (ALWAYS PASS AFTER CLICK)
+    if user_id not in user_allowed:
+
+        await update.message.reply_text(
+            "📢 ابتدا در کانال زیر عضو شو و سپس روی «عضو شدم» کلیک کن.",
+            reply_markup=join_keyboard()
+        )
+        return
 
     # 🤖 AI RESPONSE
     result = ai_translate(text)
@@ -200,11 +228,20 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    # ✅ FAKE JOIN (NO REAL CHECK)
+    if data == "check_join":
+
+        user_allowed.add(query.from_user.id)
+        save_allowed()
+
+        await query.message.reply_text("✅ فعال شد")
+
     # 📘 EXAMPLE
-    if data.startswith("example:"):
+    elif data.startswith("example:"):
 
         word = data.split(":", 1)[1]
         ex = ai_example(word)
+
         await query.message.reply_text(ex)
 
     # 🔙 BACK
@@ -257,11 +294,11 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     cursor.execute("SELECT user_id FROM users")
-    users = cursor.fetchall()
+    all_users = cursor.fetchall()
 
     sent = 0
 
-    for u in users:
+    for u in all_users:
 
         try:
             await context.bot.send_message(chat_id=u[0], text=f"📢 {msg}")
