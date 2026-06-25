@@ -28,7 +28,7 @@ def main_menu():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📩 پشتیبانی Ketabun", url="https://t.me/Ketabun"),
-            InlineKeyboardButton("📚 آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
+            InlineKeyboardButton("📚 کانال آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
         ],
         [
             InlineKeyboardButton("🎥 کلاس آنلاین رایگان", url=ONLINE_CLASS_LINK),
@@ -40,7 +40,7 @@ def main_menu():
         ],
         [
             InlineKeyboardButton("🎓 اوسبیلدونگ", url="https://t.me/+TFAMe1OSiBhmZDhk"),
-            InlineKeyboardButton("🧪 آزمون سفارت", url="https://t.me/+VMSXWp62w-Q0MGQ8")
+            InlineKeyboardButton("🧪 امادگی آزمون سفارت", url="https://t.me/+VMSXWp62w-Q0MGQ8")
         ]
     ])
 
