@@ -9,6 +9,8 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ADMIN_ID = 744748269
 
+CHANNEL_USERNAME = "@YourChannel"
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
@@ -36,7 +38,7 @@ LINKS = {
     "exam": "https://t.me/+VMSXWp62w-Q0MGQ8"
 }
 
-# 🧭 MAIN MENU (ORDER FIXED)
+# 🧭 MAIN MENU
 def main_menu():
 
     return InlineKeyboardMarkup([
@@ -58,6 +60,15 @@ def main_menu():
         ]
     ])
 
+# 🔐 CHECK JOIN CHANNEL
+async def is_member(bot, user_id):
+
+    try:
+        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except:
+        return False
+
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -66,12 +77,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_users(users)
 
     await update.message.reply_text(
-        "🇩🇪 خوش آمدی به ربات آلمانی هوشمند\n\n"
-        "✍️ یه کلمه یا جمله فارسی/آلمانی بفرست",
+        "🇩🇪 خوش آمدی\n\n✍️ یک کلمه یا جمله بفرست",
         reply_markup=main_menu()
     )
 
-# 🤖 TRANSLATION (NO VOICE + PERSIAN PRONUNCIATION)
+# 💣 AI DICTIONARY (FIXED FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -79,20 +89,19 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Translate Persian ↔ German.
+You are a German dictionary bot.
 
-If word:
-- German word
-- article
-- plural
-- Persian meaning
-- Persian pronunciation (phonetic writing)
+Return ONLY this format:
 
-If sentence:
-- full translation
-- Persian pronunciation of German words
+German:
+Article:
+Plural:
+Pronunciation (Persian):
+Example:
 
-TEXT: {text}
+NO extra text.
+
+WORD: {text}
 """
         }]
     )
@@ -106,11 +115,7 @@ def ai_example(word):
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"""
-Make 1 simple German sentence + Persian meaning.
-
-WORD: {word}
-"""
+            "content": f"Give 1 simple German sentence + Persian meaning for: {word}"
         }]
     )
 
@@ -119,8 +124,23 @@ WORD: {word}
 # 💬 MESSAGE HANDLER
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text
+    user_id = update.effective_user.id
 
+    # 🔐 FORCE JOIN CHANNEL
+    if not await is_member(context.bot, user_id):
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 عضویت در کانال", url=f"https://t.me/{CHANNEL_USERNAME.replace('@','')}")],
+            [InlineKeyboardButton("✅ عضو شدم", callback_data="check_join")]
+        ])
+
+        await update.message.reply_text(
+            "❌ برای استفاده باید عضو کانال بشی",
+            reply_markup=keyboard
+        )
+        return
+
+    text = update.message.text
     result = ai_translate(text)
 
     keyboard = InlineKeyboardMarkup([
@@ -129,7 +149,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-# 🔁 CALLBACK ROUTER
+# 🔁 CALLBACK
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -145,26 +165,28 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text(f"📘 مثال:\n\n{ex}")
 
-    # 👨‍💼 ADMIN STATS
+    # 🔐 CHECK JOIN
+    elif data == "check_join":
+
+        if await is_member(context.bot, query.from_user.id):
+            await query.message.reply_text("✅ دسترسی فعال شد")
+        else:
+            await query.message.reply_text("❌ هنوز عضو نشدی")
+
+    # 👨‍💼 ADMIN
     elif data == "stats" and query.from_user.id == ADMIN_ID:
         await query.message.reply_text(f"📊 کاربران: {len(users)}")
 
-    # 👥 USERS LIST
     elif data == "users" and query.from_user.id == ADMIN_ID:
         text = "\n".join(list(users.keys())[:20])
-        await query.message.reply_text(f"👥 کاربران:\n{text}")
-
-    # 📢 BROADCAST INFO
-    elif data == "broadcast" and query.from_user.id == ADMIN_ID:
-        await query.message.reply_text("📢 /broadcast پیام")
+        await query.message.reply_text(text)
 
 # 👨‍💼 ADMIN PANEL
 def admin_panel():
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 آمار", callback_data="stats")],
-        [InlineKeyboardButton("👥 کاربران", callback_data="users")],
-        [InlineKeyboardButton("📢 پیام گروهی", callback_data="broadcast")]
+        [InlineKeyboardButton("👥 کاربران", callback_data="users")]
     ])
 
 # /admin
@@ -178,26 +200,6 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_panel()
     )
 
-# 📢 BROADCAST
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    msg = " ".join(context.args)
-
-    if not msg:
-        await update.message.reply_text("❌ پیام بده")
-        return
-
-    for uid in users.keys():
-        try:
-            await context.bot.send_message(chat_id=uid, text=f"📢 {msg}")
-        except:
-            pass
-
-    await update.message.reply_text("✅ ارسال شد")
-
 # 🚀 RUN BOT
 def main():
 
@@ -205,7 +207,6 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
