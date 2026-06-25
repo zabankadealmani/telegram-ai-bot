@@ -3,14 +3,7 @@ import threading
 from flask import Flask
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 from openai import OpenAI
 
@@ -22,22 +15,23 @@ ADMIN_ID = 744748269
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# 🔗 LINKS
-CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
-ONLINE_CLASS_LINK = "https://t.me/+Gq6nK-16B7Y2OTk0"
 
-
-# 🌐 KEEP ALIVE SERVER (Render fix)
+# 🌐 KEEP ALIVE SERVER (برای جلوگیری از Sleep در Render)
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "bot alive"
+    return "bot is alive"
 
 def run():
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=10000)
 
 threading.Thread(target=run).start()
+
+
+# 🔗 LINKS
+CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
+ONLINE_CLASS_LINK = "https://t.me/+Gq6nK-16B7Y2OTk0"
 
 
 # 📦 DATABASE
@@ -46,7 +40,7 @@ user_allowed = set()
 users_info = {}
 
 
-# 🧭 MENU
+# 🧭 MAIN MENU
 def main_menu():
 
     return InlineKeyboardMarkup([
@@ -107,7 +101,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 🤖 AI (FIXED: ALWAYS PERSIAN)
+# 🤖 AI TRANSLATE (FIXED + SAFE)
 def ai_translate(text):
 
     try:
@@ -120,8 +114,8 @@ Return EXACT format:
 
 German word
 Article + word
-Plural
-Persian meaning (MANDATORY)
+Plural form
+Persian meaning (ALWAYS REQUIRED)
 Persian pronunciation (ONE LINE)
 Example sentence (German + Persian meaning)
 
@@ -133,9 +127,10 @@ WORD: {text}
         return res.choices[0].message.content
 
     except:
-        return "❌ خطا در دریافت اطلاعات"
+        return "❌ خطا در پردازش"
 
 
+# 📘 EXAMPLE
 def ai_example(word):
 
     res = client.chat.completions.create(
@@ -156,11 +151,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🚫 ignore commands
     if text.startswith("/"):
         return
 
-    # 🔐 JOIN CHECK
+    # 🔐 ACCESS CHECK
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -179,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 LOG ADMIN
+    # 📩 ADMIN LOG
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=
@@ -199,25 +193,21 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
         await query.message.reply_text("✅ فعال شد")
 
-    # 📘 EXAMPLE
     elif data.startswith("example:"):
 
         word = data.split(":", 1)[1]
         ex = ai_example(word)
         await query.message.reply_text(ex)
 
-    # 🔙 BACK
     elif data == "back":
 
         await query.message.reply_text("🏠 منو اصلی", reply_markup=main_menu())
 
-    # 👨‍💼 ADMIN
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
