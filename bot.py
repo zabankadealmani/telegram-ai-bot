@@ -1,5 +1,4 @@
 import os
-import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from openai import OpenAI
@@ -13,9 +12,10 @@ CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# 📦 SIMPLE DB
+# 📦 DB
 users = set()
-user_allowed = set()
+users_data = {}
+user_target = {}
 
 # 🧭 MAIN MENU
 def main_menu():
@@ -51,19 +51,25 @@ def join_keyboard():
 def admin_panel():
 
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 آمار کاربران", callback_data="stats")],
-        [InlineKeyboardButton("👥 لیست کاربران", callback_data="users")],
-        [InlineKeyboardButton("📢 ارسال پیام گروهی", callback_data="broadcast")],
+        [InlineKeyboardButton("📊 آمار", callback_data="stats")],
+        [InlineKeyboardButton("👥 کاربران", callback_data="users")],
+        [InlineKeyboardButton("📢 پیام گروهی", callback_data="broadcast")],
         [InlineKeyboardButton("🔙 برگشت", callback_data="back")]
     ])
 
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    users.add(update.effective_user.id)
+    user = update.effective_user
+
+    users.add(user.id)
+    users_data[user.id] = {
+        "name": user.full_name,
+        "username": user.username
+    }
 
     await update.message.reply_text(
-        "🇩🇪 خوش آمدی به ربات آلمانی هوشمند\n\n✍️ کلمه یا جمله بفرست",
+        "🇩🇪 خوش آمدی\n✍️ کلمه یا جمله بفرست",
         reply_markup=main_menu()
     )
 
@@ -75,7 +81,7 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Return ONLY:
+Return EXACT:
 
 German:
 Article:
@@ -97,7 +103,7 @@ def ai_example(word):
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Give 1 German sentence + Persian meaning: {word}"
+            "content": f"Make 1 German sentence + Persian meaning: {word}"
         }]
     )
 
@@ -110,12 +116,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     # 🔐 FORCE JOIN (simple)
-    if user_id not in user_allowed:
+    if user_id not in users:
 
         await update.message.reply_text(
-            "❌ برای استفاده باید عضو کانال بشی",
+            "❌ اول عضو کانال شو",
             reply_markup=join_keyboard()
         )
+        return
+
+    # 👨‍💼 PRIVATE MESSAGE TO USER (ADMIN MODE)
+    if user_id in user_target:
+
+        target = user_target[user_id]
+
+        await context.bot.send_message(
+            chat_id=target,
+            text=f"📩 پیام از ادمین:\n\n{text}"
+        )
+
+        await update.message.reply_text("✅ ارسال شد")
+        del user_target[user_id]
         return
 
     # 🤖 AI RESPONSE
@@ -128,13 +148,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 👨‍💼 SEND COPY TO ADMIN
+    # 👨‍💼 LOG TO ADMIN
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"📩 پیام کاربر\n\n👤 ID: {user_id}\n💬 Text: {text}"
+        text=f"📩 پیام\n👤 {user_id}\n💬 {text}"
     )
 
-# 🔁 CALLBACK ROUTER
+# 🔁 CALLBACKS
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -142,11 +162,10 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN CONFIRM
+    # ✅ JOIN
     if data == "check_join":
 
-        user_allowed.add(query.from_user.id)
-        await query.message.reply_text("✅ دسترسی فعال شد")
+        await query.message.reply_text("✅ فعال شد")
 
     # 📘 EXAMPLE
     elif data.startswith("example:"):
@@ -154,30 +173,50 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         word = data.split(":", 1)[1]
         ex = ai_example(word)
 
-        await query.message.reply_text(f"📘 مثال:\n\n{ex}")
+        await query.message.reply_text(ex)
 
     # 🔙 BACK
     elif data == "back":
 
-        await query.message.reply_text("🏠 منو اصلی:", reply_markup=main_menu())
+        await query.message.reply_text("🏠 منو", reply_markup=main_menu())
 
-    # 👨‍💼 ADMIN STATS
-    elif data == "stats" and query.from_user.id == ADMIN_ID:
+    # 👨‍💼 ADMIN PANEL
+    elif query.from_user.id == ADMIN_ID:
 
-        await query.message.reply_text(f"📊 تعداد کاربران: {len(users)}")
+        if data == "stats":
 
-    # 👥 USERS LIST
-    elif data == "users" and query.from_user.id == ADMIN_ID:
+            await query.message.reply_text(f"📊 کاربران: {len(users)}")
 
-        text = "\n".join(str(u) for u in list(users)[:30])
-        await query.message.reply_text(text)
+        elif data == "users":
 
-    # 📢 BROADCAST MENU
-    elif data == "broadcast" and query.from_user.id == ADMIN_ID:
+            keyboard = []
 
-        await query.message.reply_text("📢 استفاده:\n/broadcast پیام")
+            for uid, info in users_data.items():
 
-# 📢 BROADCAST COMMAND
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"{info.get('name')}",
+                        callback_data=f"msg:{uid}"
+                    )
+                ])
+
+            await query.message.reply_text(
+                "👥 انتخاب کاربر:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        elif data.startswith("msg:"):
+
+            uid = int(data.split(":")[1])
+            user_target[query.from_user.id] = uid
+
+            await query.message.reply_text("✍️ پیام رو بنویس")
+
+        elif data == "broadcast":
+
+            await query.message.reply_text("📢 /broadcast متن")
+
+# 📢 BROADCAST
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
@@ -191,24 +230,24 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent = 0
 
-    for user_id in users:
+    for u in users:
 
         try:
-            await context.bot.send_message(chat_id=user_id, text=f"📢 {msg}")
+            await context.bot.send_message(u, f"📢 {msg}")
             sent += 1
         except:
             pass
 
-    await update.message.reply_text(f"✅ ارسال شد به {sent} نفر")
+    await update.message.reply_text(f"✅ ارسال شد به {sent}")
 
-# 🚀 RUN BOT
+# 🚀 RUN
 def main():
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("admin", lambda u, c: u.message.reply_text("👨‍💼 پنل ادمین", reply_markup=admin_panel())))
+    app.add_handler(CommandHandler("admin", lambda u, c: u.message.reply_text("👨‍💼 پنل", reply_markup=admin_panel())))
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
