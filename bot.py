@@ -1,5 +1,4 @@
 import os
-import json
 import sqlite3
 import threading
 from flask import Flask
@@ -32,7 +31,7 @@ def run():
 threading.Thread(target=run).start()
 
 
-# 🗄️ SQLITE DB (users)
+# 🗄️ SQLITE DATABASE
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -46,15 +45,18 @@ CREATE TABLE IF NOT EXISTS users (
 conn.commit()
 
 
-# 💾 PERSIST FAKE JOIN SYSTEM
+# 💾 FAKE JOIN STORAGE (PERSISTENT)
 ALLOWED_FILE = "allowed.json"
+
+import json
+import os
 
 def load_allowed():
     global user_allowed
-    try:
+    if os.path.exists(ALLOWED_FILE):
         with open(ALLOWED_FILE, "r") as f:
             user_allowed = set(json.load(f))
-    except:
+    else:
         user_allowed = set()
 
 def save_allowed():
@@ -62,10 +64,7 @@ def save_allowed():
         json.dump(list(user_allowed), f)
 
 
-# 🔐 MEMORY
-users_info = {}
 user_allowed = set()
-users = set()
 
 
 # 🔗 LINKS
@@ -96,7 +95,7 @@ def main_menu():
     ])
 
 
-# 🔐 JOIN BUTTON (FAKE BUT STABLE)
+# 🔐 JOIN BUTTON
 def join_keyboard():
 
     return InlineKeyboardMarkup([
@@ -116,7 +115,7 @@ def admin_panel():
     ])
 
 
-# 🚀 LOAD FAKE ACCESS
+# 🚀 LOAD
 load_allowed()
 
 
@@ -124,8 +123,6 @@ load_allowed()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
-
-    users.add(user.id)
 
     cursor.execute(
         "INSERT OR IGNORE INTO users (user_id, name, username) VALUES (?, ?, ?)",
@@ -147,7 +144,7 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Return EXACT format:
+Return EXACT:
 
 German word
 Article + word
@@ -185,11 +182,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🚫 ignore commands
     if text.startswith("/"):
         return
 
-    # 🔐 FAKE GATE (ALWAYS PASS AFTER CLICK)
+    # 🔐 FAKE JOIN (ALWAYS WORKS AFTER CLICK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -228,7 +224,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ FAKE JOIN (NO REAL CHECK)
+    # ✅ FAKE JOIN
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
@@ -261,7 +257,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data == "users":
 
-            cursor.execute("SELECT * FROM users")
+            cursor.execute("SELECT user_id, name, username FROM users")
             rows = cursor.fetchall()
 
             text = ""
@@ -294,11 +290,11 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     cursor.execute("SELECT user_id FROM users")
-    all_users = cursor.fetchall()
+    users = cursor.fetchall()
 
     sent = 0
 
-    for u in all_users:
+    for u in users:
 
         try:
             await context.bot.send_message(chat_id=u[0], text=f"📢 {msg}")
@@ -309,7 +305,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ ارسال شد به {sent}")
 
 
-# 🚀 MAIN
+# 🚀 RUN BOT
 def main():
 
     app_bot = Application.builder().token(TOKEN).build()
