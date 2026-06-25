@@ -8,11 +8,16 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ADMIN_ID = 744748269
+
+# 📢 کانال اجباری
 CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
+
+# 🎥 کلاس آنلاین (اگر اشتباهه فقط اینو عوض کن)
+ONLINE_CLASS_LINK = "https://t.me/+VMSXWp62w-Q0MGQ8"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# 📦 DB
+# 📦 DB ساده
 users = set()
 users_data = {}
 user_target = {}
@@ -26,7 +31,7 @@ def main_menu():
             InlineKeyboardButton("📚 آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
         ],
         [
-            InlineKeyboardButton("🎥 کلاس آنلاین", url="https://t.me/+VMSXWp62w-Q0MGQ8"),
+            InlineKeyboardButton("🎥 کلاس آنلاین رایگان", url=ONLINE_CLASS_LINK),
             InlineKeyboardButton("🎬 فیلم آلمانی", url="https://t.me/+5Ll-_PHEmfEwOWQ8")
         ],
         [
@@ -115,16 +120,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # 🔐 FORCE JOIN (simple)
+    # 🔐 FORCE JOIN
     if user_id not in users:
 
         await update.message.reply_text(
-            "❌ اول عضو کانال شو",
+            "❌ برای استفاده باید عضو کانال بشی",
             reply_markup=join_keyboard()
         )
         return
 
-    # 👨‍💼 PRIVATE MESSAGE TO USER (ADMIN MODE)
+    # 👨‍💼 SEND TO USER (ADMIN CHAT MODE)
     if user_id in user_target:
 
         target = user_target[user_id]
@@ -148,10 +153,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 👨‍💼 LOG TO ADMIN
+    # 📩 LOG TO ADMIN
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"📩 پیام\n👤 {user_id}\n💬 {text}"
+        text=f"📩 پیام کاربر\n👤 {user_id}\n💬 {text}"
     )
 
 # 🔁 CALLBACKS
@@ -180,7 +185,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text("🏠 منو", reply_markup=main_menu())
 
-    # 👨‍💼 ADMIN PANEL
+    # 👨‍💼 ADMIN
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
@@ -195,7 +200,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 keyboard.append([
                     InlineKeyboardButton(
-                        f"{info.get('name')}",
+                        info.get("name"),
                         callback_data=f"msg:{uid}"
                     )
                 ])
@@ -233,14 +238,14 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for u in users:
 
         try:
-            await context.bot.send_message(u, f"📢 {msg}")
+            await context.bot.send_message(chat_id=u, text=f"📢 {msg}")
             sent += 1
         except:
             pass
 
     await update.message.reply_text(f"✅ ارسال شد به {sent}")
 
-# 🚀 RUN
+# 🚀 RUN BOT
 def main():
 
     app = Application.builder().token(TOKEN).build()
