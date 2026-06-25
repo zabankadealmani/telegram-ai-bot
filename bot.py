@@ -14,7 +14,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 USERS_FILE = "users.json"
 
-# 📦 USERS
+# 📦 USERS DB
 def load_users():
     if os.path.exists(USERS_FILE):
         return json.load(open(USERS_FILE))
@@ -37,12 +37,12 @@ LINKS = {
     "exam": "https://t.me/+VMSXWp62w-Q0MGQ8"
 }
 
-# 🧭 MENU (FULL 2x2 STYLE)
+# 🧭 MAIN MENU
 def main_menu():
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📩 پشتیبانی و ثبت‌نام کلاس", url=LINKS["support"]),
+            InlineKeyboardButton("📩 پشتیبانی", url=LINKS["support"]),
             InlineKeyboardButton("📚 آموزش آلمانی", url=LINKS["edu"])
         ],
         [
@@ -61,10 +61,6 @@ def main_menu():
 
 # 🚀 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    uid = str(update.effective_user.id)
-    users[uid] = {"level": "A1"}
-    save_users(users)
 
     await update.message.reply_text(
         "🇩🇪 خوش آمدی به ربات آلمانی هوشمند\n\n"
@@ -91,8 +87,6 @@ If word:
 If sentence:
 - full translation
 
-NO extra explanation
-
 TEXT: {text}
 """
         }]
@@ -113,7 +107,7 @@ def ai_example(word):
 
     return res.choices[0].message.content
 
-# 🎤 VOICE (GERMAN ONLY)
+# 🎤 VOICE
 def make_voice(text, filename="voice.mp3"):
 
     tts = gTTS(text=text, lang="de")
@@ -133,7 +127,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 🎤 VOICE (safe try)
+    # 🎤 voice
     try:
         voice = make_voice(text)
         await update.message.reply_voice(voice=open(voice, "rb"))
@@ -155,7 +149,45 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text(f"📘 مثال:\n\n{ex}")
 
-# 👨‍💼 ADMIN BROADCAST
+# 👨‍💼 ADMIN PANEL
+def admin_panel():
+
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 آمار", callback_data="stats")],
+        [InlineKeyboardButton("👥 کاربران", callback_data="users")],
+        [InlineKeyboardButton("📢 پیام گروهی", callback_data="broadcast")]
+    ])
+
+# /admin
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    await update.message.reply_text(
+        "👨‍💼 پنل ادمین",
+        reply_markup=admin_panel()
+    )
+
+# ADMIN ROUTER
+async def admin_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "stats":
+        await query.message.reply_text(f"📊 کاربران: {len(users)}")
+
+    elif data == "users":
+        text = "\n".join(list(users.keys())[:20])
+        await query.message.reply_text(f"👥 کاربران:\n{text}")
+
+    elif data == "broadcast":
+        await query.message.reply_text("📢 استفاده کن:\n/broadcast پیام")
+
+# 📢 BROADCAST
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
@@ -175,14 +207,16 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ ارسال شد")
 
-# 🚀 RUN BOT
+# 🚀 RUN
 def main():
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(router))
+    app.add_handler(CallbackQueryHandler(admin_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     app.run_polling()
