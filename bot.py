@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI TRANSLATE (FIXED FORMAT)
+# 🤖 AI (FIXED PERSIAN + FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -85,13 +85,16 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
+You MUST ALWAYS return Persian translation.
+
 Return EXACT format:
 
 German word
 Article + word
 Plural
+Persian meaning (IMPORTANT - MUST NOT BE EMPTY)
 Persian pronunciation (ONLY ONE LINE)
-Example sentence
+Example sentence (German + Persian meaning)
 
 WORD: {text}
 """
@@ -119,11 +122,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     text = update.message.text
 
-    # 🚫 BLOCK ALL COMMANDS (IMPORTANT FIX)
+    # 🚫 BLOCK COMMANDS
     if text.startswith("/"):
         return
 
-    # 🔐 SIMPLE ACCESS (NO REAL CHECK)
+    # 🔐 ACCESS GATE (NO REAL CHECK)
     if user_id not in user_allowed:
 
         await update.message.reply_text(
@@ -161,7 +164,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN BUTTON
+    # ✅ JOIN
     if data == "check_join":
 
         user_allowed.add(query.from_user.id)
@@ -181,7 +184,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.message.reply_text("🏠 منو اصلی", reply_markup=main_menu())
 
-    # 👨‍💼 ADMIN PANEL
+    # 👨‍💼 ADMIN
     elif query.from_user.id == ADMIN_ID:
 
         if data == "stats":
@@ -206,9 +209,9 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data == "broadcast":
 
-            await query.message.reply_text("📢 پیام خود را بفرست")
+            await query.message.reply_text("📢 /broadcast پیام")
 
-# 📢 BROADCAST (FIXED 100%)
+# 📢 BROADCAST (FIXED)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
