@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_menu()
     )
 
-# 🤖 AI TRANSLATE (FIXED FORMAT)
+# 🤖 AI (FIXED FORMAT)
 def ai_translate(text):
 
     res = client.chat.completions.create(
@@ -85,12 +85,12 @@ def ai_translate(text):
         messages=[{
             "role": "user",
             "content": f"""
-Return EXACT format like this:
+Return EXACT format:
 
 German word
 Article + word
 Plural
-Persian pronunciation (ONE LINE ONLY)
+Persian pronunciation (ONLY ONE LINE)
 Example sentence
 
 WORD: {text}
@@ -100,7 +100,6 @@ WORD: {text}
 
     return res.choices[0].message.content
 
-# 📘 EXAMPLE
 def ai_example(word):
 
     res = client.chat.completions.create(
@@ -113,15 +112,15 @@ def ai_example(word):
 
     return res.choices[0].message.content
 
-# 💬 MESSAGE HANDLER
+# 💬 MESSAGE HANDLER (FULL FIX)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
     user_id = user.id
     text = update.message.text
 
-    # 🚫 STOP BROADCAST MIXING
-    if text.startswith("/broadcast"):
+    # 🚫 BLOCK ALL COMMANDS (IMPORTANT FIX)
+    if text.startswith("/"):
         return
 
     # 🔐 GATE (NO REAL CHECK)
@@ -143,7 +142,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(result, reply_markup=keyboard)
 
-    # 📩 ADMIN LOG (FIXED)
+    # 📩 ADMIN LOG (CLEAN)
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=
@@ -209,7 +208,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await query.message.reply_text("📢 /broadcast پیام")
 
-# 📢 BROADCAST (FIXED)
+# 📢 BROADCAST (FIXED & CLEAN)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
