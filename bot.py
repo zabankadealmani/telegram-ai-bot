@@ -9,26 +9,24 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 ADMIN_ID = 744748269
 
-# 📢 کانال اجباری
+# 🔗 LINKS
 CHANNEL_LINK = "https://t.me/+JZRkw2YnlpRlMTM0"
-
-# 🎥 کلاس آنلاین (اگر اشتباهه فقط اینو عوض کن)
-ONLINE_CLASS_LINK = "https://t.me/+VMSXWp62w-Q0MGQ8"
+ONLINE_CLASS_LINK = "https://t.me/+Gq6nK-16B7Y2OTk0"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# 📦 DB ساده
+# 📦 DB
 users = set()
-users_data = {}
+user_allowed = set()
 user_target = {}
 
-# 🧭 MAIN MENU
+# 🧭 MENU
 def main_menu():
 
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📩 پشتیبانی Ketabun", url="https://t.me/Ketabun"),
-            InlineKeyboardButton("📚 کانال آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
+            InlineKeyboardButton("📚 آموزش آلمانی", url="https://t.me/+IcNQUW7bM_xjZjdk")
         ],
         [
             InlineKeyboardButton("🎥 کلاس آنلاین رایگان", url=ONLINE_CLASS_LINK),
@@ -40,15 +38,15 @@ def main_menu():
         ],
         [
             InlineKeyboardButton("🎓 اوسبیلدونگ", url="https://t.me/+TFAMe1OSiBhmZDhk"),
-            InlineKeyboardButton("🧪 امادگی آزمون سفارت", url="https://t.me/+VMSXWp62w-Q0MGQ8")
+            InlineKeyboardButton("🧪 آزمون سفارت", url="https://t.me/+VMSXWp62w-Q0MGQ8")
         ]
     ])
 
-# 🔐 JOIN KEYBOARD
+# 🔐 JOIN BUTTON
 def join_keyboard():
 
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 عضویت در کانال", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("📢 ورود به کانال", url=CHANNEL_LINK)],
         [InlineKeyboardButton("✅ عضو شدم", callback_data="check_join")]
     ])
 
@@ -68,13 +66,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     users.add(user.id)
-    users_data[user.id] = {
-        "name": user.full_name,
-        "username": user.username
-    }
 
     await update.message.reply_text(
-        "🇩🇪 خوش آمدی\n✍️ کلمه یا جمله بفرست",
+        "🇩🇪 خوش آمدی به ربات آلمانی\n✍️ کلمه یا جمله بفرست",
         reply_markup=main_menu()
     )
 
@@ -108,7 +102,7 @@ def ai_example(word):
         model="gpt-4o-mini",
         messages=[{
             "role": "user",
-            "content": f"Make 1 German sentence + Persian meaning: {word}"
+            "content": f"Give 1 German sentence + Persian meaning: {word}"
         }]
     )
 
@@ -120,16 +114,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # 🔐 FORCE JOIN
-    if user_id not in users:
+    # 🔐 SIMPLE GATE (ONLY BUTTON)
+    if user_id not in user_allowed:
 
         await update.message.reply_text(
-            "❌ برای استفاده باید عضو کانال بشی",
+            "❌ اول روی 'عضو شدم' بزن",
             reply_markup=join_keyboard()
         )
         return
 
-    # 👨‍💼 SEND TO USER (ADMIN CHAT MODE)
+    # 👨‍💼 ADMIN MESSAGE COPY
     if user_id in user_target:
 
         target = user_target[user_id]
@@ -167,8 +161,10 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # ✅ JOIN
+    # ✅ JOIN BUTTON
     if data == "check_join":
+
+        user_allowed.add(query.from_user.id)
 
         await query.message.reply_text("✅ فعال شد")
 
@@ -183,7 +179,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🔙 BACK
     elif data == "back":
 
-        await query.message.reply_text("🏠 منو", reply_markup=main_menu())
+        await query.message.reply_text("🏠 منو اصلی", reply_markup=main_menu())
 
     # 👨‍💼 ADMIN
     elif query.from_user.id == ADMIN_ID:
@@ -194,32 +190,12 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data == "users":
 
-            keyboard = []
-
-            for uid, info in users_data.items():
-
-                keyboard.append([
-                    InlineKeyboardButton(
-                        info.get("name"),
-                        callback_data=f"msg:{uid}"
-                    )
-                ])
-
-            await query.message.reply_text(
-                "👥 انتخاب کاربر:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        elif data.startswith("msg:"):
-
-            uid = int(data.split(":")[1])
-            user_target[query.from_user.id] = uid
-
-            await query.message.reply_text("✍️ پیام رو بنویس")
+            text = "\n".join(str(u) for u in list(users)[:30])
+            await query.message.reply_text(text)
 
         elif data == "broadcast":
 
-            await query.message.reply_text("📢 /broadcast متن")
+            await query.message.reply_text("📢 /broadcast پیام")
 
 # 📢 BROADCAST
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
