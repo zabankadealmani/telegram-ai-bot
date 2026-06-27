@@ -257,27 +257,23 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif data == "users":
 
-            cursor.execute("SELECT user_id, name, username FROM users")
-            rows = cursor.fetchall()
+cursor.execute("SELECT user_id, name, username FROM users")
+rows = cursor.fetchall()
 
-            text = ""
+if not rows:
+    await query.message.reply_text("❌ هیچ کاربری ثبت نشده است.")
+    return
 
-            for r in rows[:50]:
+text = ""
 
-                uid = r[0]
-                name = r[1]
-                username = r[2] if r[2] else "ندارد"
+for r in rows[:50]:
+    uid = r[0]
+    name = r[1]
+    username = r[2] if r[2] else "ندارد"
 
-                text += f"👤 {name}\n🔹 @{username}\n🆔 {uid}\n\n"
+    text += f"👤 {name}\n🔹 @{username}\n🆔 {uid}\n\n"
 
-            await query.message.reply_text(text[:4000])
-
-        elif data == "broadcast":
-
-            await query.message.reply_text("📢 /broadcast پیام")
-
-
-# 📢 BROADCAST
+await query.message.reply_text(text[:4000])
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.effective_user.id != ADMIN_ID:
