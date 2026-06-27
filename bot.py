@@ -52,21 +52,20 @@ def save_allowed():
         json.dump(list(user_allowed), f)
 
 
-# 🔗 JOIN LINK
+# 🔗 JOIN
 CHANNEL_LINK = "https://t.me/yourchannel"
-
-
-# 🧭 MENU
-def main_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📚 کانال", url=CHANNEL_LINK)]
-    ])
 
 
 def join_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 ورود به کانال", url=CHANNEL_LINK)],
         [InlineKeyboardButton("✅ عضو شدم", callback_data="check_join")]
+    ])
+
+
+def main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📚 کانال", url=CHANNEL_LINK)]
     ])
 
 
@@ -89,7 +88,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 🤖 SAFE AI
+# 🤖 SAFE AI (مهم)
 def ai_translate(text):
     try:
         res = client.chat.completions.create(
@@ -97,18 +96,20 @@ def ai_translate(text):
             messages=[{
                 "role": "user",
                 "content": f"""
-German word info:
+German word explanation:
 Word: {text}
-Return: meaning + example
+Give meaning + example.
 """
             }]
         )
+
         return res.choices[0].message.content
-    except:
+
+    except Exception as e:
         return "❌ خطا در دریافت پاسخ از AI"
 
 
-# 💬 MESSAGE HANDLER
+# 💬 MESSAGE HANDLER (FIXED EMPTY TEXT)
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
@@ -135,7 +136,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(result[:4000])
 
 
-# 🔁 CALLBACKS
+# 🔁 CALLBACKS (FIXED SAFETY)
 async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -143,14 +144,14 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # join check
+    # JOIN CHECK
     if data == "check_join":
         user_allowed.add(query.from_user.id)
         save_allowed()
         await query.message.reply_text("✅ فعال شد")
         return
 
-    # admin only
+    # ADMIN PANEL
     if query.from_user.id == ADMIN_ID:
 
         if data == "stats":
@@ -160,7 +161,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if data == "users":
-            cursor.execute("SELECT * FROM users")
+            cursor.execute("SELECT user_id, name, username FROM users")
             rows = cursor.fetchall()
 
             if not rows:
@@ -168,8 +169,17 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             text = ""
+
             for r in rows[:50]:
-                text += f"👤 {r[1]} @{r[2] or 'ندارد'}\n🆔 {r[0]}\n\n"
+                uid = r[0]
+                name = r[1]
+                username = r[2] or "ندارد"
+
+                text += f"👤 {name}\n🔹 @{username}\n🆔 {uid}\n\n"
+
+            if not text.strip():
+                await query.message.reply_text("❌ لیست خالی است")
+                return
 
             await query.message.reply_text(text[:4000])
             return
@@ -177,7 +187,7 @@ async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text("⛔ دسترسی ندارید")
 
 
-# 🚀 MAIN
+# 🚀 MAIN (ONLY POLLING - NO FLASK)
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -186,7 +196,7 @@ def main():
     app.add_handler(CallbackQueryHandler(router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot started...")
+    print("Bot is running...")
     app.run_polling()
 
 
